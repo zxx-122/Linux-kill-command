@@ -1,0 +1,8 @@
+{
+	"appId": "com.zxc.linuxzhan",
+	"appName": "Linux命令斩",
+	"webDir": "www",
+	"android": {
+		"backgroundColor": "#0f2027"
+	}
+}

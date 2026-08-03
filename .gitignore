@@ -1,0 +1,10 @@
+# 测试截图
+extracted/shots/
+
+# 签名中间产物
+*.idsig
+
+# 临时测试页面
+extracted/test.html
+extracted/test2.html
+extracted/bugcheck.html

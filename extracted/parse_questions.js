@@ -1,0 +1,17 @@
+const fs = require('fs');
+const html = fs.readFileSync('D:/linux命令斩/extracted/index.html', 'utf8');
+const marker = 'const QUESTIONS = ';
+const start = html.indexOf(marker) + marker.length;
+const end = html.indexOf('];\ndocument.', start) + 1;
+const arr = JSON.parse(html.slice(start, end));
+console.log('total:', arr.length);
+const cats = [...new Set(arr.map(q => q.cat))];
+console.log('cats:', JSON.stringify(cats));
+const byCat = {};
+arr.forEach(q => { byCat[q.cat] = (byCat[q.cat] || 0) + 1; });
+console.log('byCat:', JSON.stringify(byCat));
+const byType = {};
+arr.forEach(q => { byType[q.type] = (byType[q.type] || 0) + 1; });
+console.log('byType:', JSON.stringify(byType));
+fs.writeFileSync('D:/linux命令斩/extracted/questions.json', JSON.stringify(arr, null, 1));
+console.log('saved questions.json');
