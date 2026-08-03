@@ -216,6 +216,11 @@
   .feedback .got { font-family: monospace; font-size: 17px; font-weight: 700; }
   .fb-memo { display: block; margin-top: 4px; font-size: 13px; color: #9fd8c4; }
   .fb-cheer { display: block; margin-top: 6px; font-size: 12.5px; opacity: .85; }
+  .fb-speak {
+    margin-top: 10px; padding: 7px 14px; border: 1px solid rgba(92,214,168,0.4); border-radius: 10px;
+    background: rgba(63,184,140,0.15); color: var(--brand-hi); font-size: 13px; cursor: pointer;
+  }
+  .fb-speak:active { transform: scale(.96); background: rgba(63,184,140,0.28); }
 
   /* 结算界面 */
   .result-title { font-size: 21px; font-weight: 700; text-align: center; margin: 6px 0 14px; }
@@ -370,6 +375,34 @@
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
   }
+
+  /* 答题导航（上一题 / 下一题） */
+  .quiz-nav { display: flex; gap: 10px; margin-top: 14px; }
+  .quiz-nav .btn-sm { flex: 1; padding: 11px; font-size: 14px; }
+  .quiz-nav .btn-sm:disabled { opacity: .35; }
+
+  /* 快捷键模块 */
+  .sc-group { margin-bottom: 16px; }
+  .sc-group h3 { font-size: 15px; margin-bottom: 8px; color: var(--gold); }
+  .sc-item {
+    display: flex; align-items: flex-start; gap: 10px; padding: 9px 12px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px; margin-bottom: 6px; font-size: 13px; line-height: 1.6;
+  }
+  .sc-key {
+    font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px; font-weight: 700;
+    color: var(--brand-hi); background: rgba(63,184,140,0.15); border: 1px solid rgba(63,184,140,0.3);
+    padding: 2px 8px; border-radius: 6px; flex-shrink: 0; white-space: nowrap; margin-top: 1px;
+  }
+  .sc-desc { color: var(--ink-dim); }
+
+  /* 学习页常用参数 */
+  .param-line { color: var(--brand-hi); font-family: "JetBrains Mono", Consolas, monospace; font-size: 12px; line-height: 1.9; }
+
+  /* 使用说明弹窗 */
+  .manual-line { display: flex; gap: 8px; text-align: left; font-size: 13.5px; line-height: 1.7; margin-bottom: 9px; color: #c8d8dd; }
+  .manual-line .k { flex-shrink: 0; color: var(--gold); font-weight: 700; }
+  .manual-note { font-size: 11.5px; color: var(--ink-faint); margin-top: 4px; line-height: 1.7; }
 </style>
 </head>
 <body>
@@ -385,6 +418,7 @@
     <button class="tab" id="tab-learn" onclick="showTab('learn')">学习</button>
     <button class="tab" id="tab-wrong" onclick="showTab('wrong')">错题</button>
     <button class="tab" id="tab-stats" onclick="showTab('stats')">战绩</button>
+    <button class="tab" id="tab-shortcuts" onclick="showTab('shortcuts')">快捷键</button>
   </div>
 
   <!-- 练习区 -->
@@ -432,6 +466,9 @@
       <label class="toggle-row"><input type="checkbox" id="sound-toggle"> 🔊 音效（答对/答错提示音）</label>
       <button class="btn-main" onclick="startQuiz()">开始练习 🚀</button>
       <div class="hint-text">答对 +10 分，连对加分；打字模式点「提示」看首字母（-3 分）</div>
+      <div class="actions" style="margin-top:10px">
+        <button class="btn-main btn-ghost" style="margin-top:0;padding:11px" onclick="openManual()">📘 使用说明</button>
+      </div>
       <div class="tip" id="tip"></div>
     </div>
 
@@ -473,6 +510,10 @@
         </div>
       </div>
       <div class="feedback" id="feedback"></div>
+      <div class="quiz-nav">
+        <button class="btn-sm" id="btn-prev" onclick="goPrev()">⬅ 上一题</button>
+        <button class="btn-sm good" id="btn-next-q" onclick="goNext()" style="display:none">下一题 ▶</button>
+      </div>
     </div>
 
     <!-- 结算界面 -->
@@ -518,6 +559,17 @@
     <div id="learn-list"></div>
   </div>
 
+  <!-- 快捷键区 -->
+  <div id="view-shortcuts" class="card" style="display:none">
+    <h2 style="font-size:17px;margin-bottom:4px;">⌨️ Linux 快捷键大全</h2>
+    <p style="font-size:12px;color:#9fb6bf;margin-bottom:12px;">终端 / 编辑器常用快捷键，记住它们效率翻倍</p>
+    <div class="search-wrap">
+      <input class="search-input" id="sc-search" placeholder="🔍 搜快捷键 / 说明，如 Ctrl、vim" autocomplete="off">
+    </div>
+    <div class="chip-row" id="sc-chips"></div>
+    <div id="sc-list"></div>
+  </div>
+
   <!-- 错题区 -->
   <div id="view-wrong" class="card" style="display:none">
     <h2 style="font-size:17px;margin-bottom:4px;">📕 错题本</h2>
@@ -554,6 +606,7 @@
       <button class="btn-sm danger" style="flex:none;padding:0 18px" onclick="resetStats()">重置统计</button>
       <button class="btn-sm good" style="flex:none;padding:0 18px" onclick="exportData()">📋 导出数据</button>
     </div>
+    <button class="btn-main" style="margin-top:14px;background:linear-gradient(135deg,#d9534f,#b0403c);box-shadow:0 6px 18px rgba(217,83,79,0.35)" onclick="uninstallApp()">🗑️ 卸载本应用（彻底删除）</button>
   </div>
 
   <!-- 首次引导 -->
@@ -602,12 +655,307 @@
     </div>
   </div>
 
-  <footer>题库来自你的《Linux 命令大全》· 共 <span id="footer-count">0</span> 题 · v4 手机版<br>Powered by 🐧 Tux</footer>
+  <!-- 使用说明书 -->
+  <div class="overlay" id="ov-manual">
+    <div class="overlay-card">
+      <h2>📘 使用说明</h2>
+      <p style="text-align:left;color:#b8cdd4">
+        <span class="manual-line"><span class="k">①</span>练习：看中文意思 → 输入英文命令（或选答案 / 翻闪卡），答对得分、答错进错题本</span>
+        <span class="manual-line"><span class="k">②</span>学习：浏览全部命令，点开看英文全称、常用参数和示例，🔊 可听发音</span>
+        <span class="manual-line"><span class="k">③</span>快捷键：Linux 终端与编辑器常用快捷键大全，可搜索</span>
+        <span class="manual-line"><span class="k">④</span>错题：答错的题自动收录，答对即毕业</span>
+        <span class="manual-line"><span class="k">⑤</span>战绩：每日打卡、称号晋级，坚持看得见</span>
+        <span class="manual-line"><span class="k">⑥</span>数据：全部保存在手机本地，不联网不上传</span>
+      </p>
+      <div class="manual-note">提示：练习界面答完题后，可点「上一题」回顾，或点「下一题」快速继续。</div>
+      <button class="ov-btn" onclick="document.getElementById('ov-manual').classList.remove('show')">明白了！</button>
+    </div>
+  </div>
+
+  <footer>题库来自你的《Linux 命令大全》· 共 <span id="footer-count">0</span> 题 · v5 手机版<br>Powered by 🐧 Tux</footer>
 </div>
 
 <script>
 const QUESTIONS = [{"type":"cmd","answers":["ls"],"meaning":"列出","en":"list","cat":"目录文件"},{"type":"cmd","answers":["cd"],"meaning":"改变目录（切换目录）","en":"change directory","cat":"目录文件"},{"type":"cmd","answers":["pwd"],"meaning":"打印工作目录","en":"print working directory","cat":"目录文件"},{"type":"cmd","answers":["mkdir"],"meaning":"创建目录","en":"make directory","cat":"目录文件"},{"type":"cmd","answers":["rmdir"],"meaning":"删除空目录","en":"remove directory","cat":"目录文件"},{"type":"cmd","answers":["rm"],"meaning":"删除","en":"remove","cat":"目录文件"},{"type":"cmd","answers":["cp"],"meaning":"复制","en":"copy","cat":"目录文件"},{"type":"cmd","answers":["mv"],"meaning":"移动/重命名","en":"move","cat":"目录文件"},{"type":"cmd","answers":["touch"],"meaning":"触摸（创建空文件/更新时间戳）","en":"touch","cat":"目录文件"},{"type":"cmd","answers":["ln"],"meaning":"链接（快捷方式）","en":"link","cat":"目录文件"},{"type":"cmd","answers":["file"],"meaning":"查看文件类型","en":"file type","cat":"目录文件"},{"type":"cmd","answers":["stat"],"meaning":"状态","en":"status","cat":"目录文件"},{"type":"cmd","answers":["tree"],"meaning":"树（树状显示）","en":"tree","cat":"目录文件"},{"type":"cmd","answers":["basename"],"meaning":"基础名（取文件名）","en":"base name","cat":"目录文件"},{"type":"cmd","answers":["dirname"],"meaning":"目录名（取目录部分）","en":"dir name","cat":"目录文件"},{"type":"cmd","answers":["realpath"],"meaning":"真实路径","en":"real path","cat":"目录文件"},{"type":"cmd","answers":["cat"],"meaning":"连接（查看内容）","en":"concatenate","cat":"内容查看"},{"type":"cmd","answers":["tac"],"meaning":"反向查看","en":"cat 倒写","cat":"内容查看"},{"type":"cmd","answers":["less"],"meaning":"较少（分页查看）","en":"less","cat":"内容查看"},{"type":"cmd","answers":["more"],"meaning":"更多（分页查看）","en":"more","cat":"内容查看"},{"type":"cmd","answers":["head"],"meaning":"头部（查看开头）","en":"head","cat":"内容查看"},{"type":"cmd","answers":["tail"],"meaning":"尾部（查看结尾）","en":"tail","cat":"内容查看"},{"type":"cmd","answers":["nl"],"meaning":"行编号","en":"number lines","cat":"内容查看"},{"type":"cmd","answers":["od"],"meaning":"八进制转储","en":"octal dump","cat":"内容查看"},{"type":"cmd","answers":["xxd","hexdump"],"meaning":"十六进制转储","en":"hex dump","cat":"内容查看"},{"type":"cmd","answers":["grep"],"meaning":"全局正则搜索","en":"global regular expression print","cat":"文本处理"},{"type":"cmd","answers":["sed"],"meaning":"流编辑器","en":"stream editor","cat":"文本处理"},{"type":"cmd","answers":["awk"],"meaning":"三位作者姓氏（文本分析）","en":"Aho-Weinberger-Kernighan","cat":"文本处理"},{"type":"cmd","answers":["cut"],"meaning":"切分（提取列）","en":"cut","cat":"文本处理"},{"type":"cmd","answers":["sort"],"meaning":"排序","en":"sort","cat":"文本处理"},{"type":"cmd","answers":["uniq"],"meaning":"去重","en":"unique","cat":"文本处理"},{"type":"cmd","answers":["wc"],"meaning":"字数统计","en":"word count","cat":"文本处理"},{"type":"cmd","answers":["tr"],"meaning":"字符转换","en":"translate","cat":"文本处理"},{"type":"cmd","answers":["tee"],"meaning":"分流输出（屏幕+文件）","en":"T 型管","cat":"文本处理"},{"type":"cmd","answers":["paste"],"meaning":"按列合并","en":"paste","cat":"文本处理"},{"type":"cmd","answers":["join"],"meaning":"按公共字段合并","en":"join","cat":"文本处理"},{"type":"cmd","answers":["split"],"meaning":"拆分","en":"split","cat":"文本处理"},{"type":"cmd","answers":["diff"],"meaning":"差异","en":"difference","cat":"文本处理"},{"type":"cmd","answers":["patch"],"meaning":"补丁","en":"patch","cat":"文本处理"},{"type":"cmd","answers":["cmp"],"meaning":"逐字节比较","en":"compare","cat":"文本处理"},{"type":"cmd","answers":["comm"],"meaning":"公共行比较","en":"common","cat":"文本处理"},{"type":"cmd","answers":["column"],"meaning":"列对齐","en":"column","cat":"文本处理"},{"type":"cmd","answers":["rev"],"meaning":"反转","en":"reverse","cat":"文本处理"},{"type":"cmd","answers":["fold"],"meaning":"折行","en":"fold","cat":"文本处理"},{"type":"cmd","answers":["expand","unexpand"],"meaning":"展开（Tab/空格互转）","en":"expand","cat":"文本处理"},{"type":"cmd","answers":["strings"],"meaning":"提取二进制中的字符串","en":"strings","cat":"文本处理"},{"type":"cmd","answers":["iconv"],"meaning":"编码转换","en":"icon converter","cat":"文本处理"},{"type":"cmd","answers":["xargs"],"meaning":"参数转换器","en":"extended arguments","cat":"文本处理"},{"type":"cmd","answers":["find"],"meaning":"查找","en":"find","cat":"文件搜索"},{"type":"cmd","answers":["locate"],"meaning":"定位","en":"locate","cat":"文件搜索"},{"type":"cmd","answers":["which"],"meaning":"哪个（查命令路径）","en":"which","cat":"文件搜索"},{"type":"cmd","answers":["whereis"],"meaning":"在哪（二进制+文档）","en":"where is","cat":"文件搜索"},{"type":"cmd","answers":["type"],"meaning":"命令类型","en":"type","cat":"文件搜索"},{"type":"cmd","answers":["whatis"],"meaning":"是什么（一句话简介）","en":"what is","cat":"文件搜索"},{"type":"cmd","answers":["apropos"],"meaning":"关于（关键词搜手册）","en":"apropos","cat":"文件搜索"},{"type":"cmd","answers":["chmod"],"meaning":"修改权限","en":"change mode","cat":"权限"},{"type":"cmd","answers":["chown"],"meaning":"修改所有者","en":"change owner","cat":"权限"},{"type":"cmd","answers":["chgrp"],"meaning":"修改所属组","en":"change group","cat":"权限"},{"type":"cmd","answers":["umask"],"meaning":"默认权限掩码","en":"user mask","cat":"权限"},{"type":"cmd","answers":["chattr"],"meaning":"修改文件属性","en":"change attribute","cat":"权限"},{"type":"cmd","answers":["lsattr"],"meaning":"列出属性","en":"list attributes","cat":"权限"},{"type":"cmd","answers":["getfacl","setfacl"],"meaning":"访问控制列表","en":"access control list","cat":"权限"},{"type":"cmd","answers":["tar"],"meaning":"磁带归档（打包）","en":"tape archive","cat":"压缩"},{"type":"cmd","answers":["gzip"],"meaning":"GNU 压缩","en":"GNU zip","cat":"压缩"},{"type":"cmd","answers":["gunzip"],"meaning":"GNU 解压","en":"GNU unzip","cat":"压缩"},{"type":"cmd","answers":["bzip2"],"meaning":"块排序压缩","en":"bzip2","cat":"压缩"},{"type":"cmd","answers":["xz"],"meaning":"XZ 压缩","en":"xz","cat":"压缩"},{"type":"cmd","answers":["zip","unzip"],"meaning":"跨平台压缩","en":"zip","cat":"压缩"},{"type":"cmd","answers":["zcat"],"meaning":"查看压缩文件","en":"gzip cat","cat":"压缩"},{"type":"cmd","answers":["uname"],"meaning":"系统信息","en":"unix name","cat":"系统信息"},{"type":"cmd","answers":["hostname"],"meaning":"主机名","en":"host name","cat":"系统信息"},{"type":"cmd","answers":["uptime"],"meaning":"运行时间","en":"up time","cat":"系统信息"},{"type":"cmd","answers":["date"],"meaning":"日期","en":"date","cat":"系统信息"},{"type":"cmd","answers":["cal"],"meaning":"日历","en":"calendar","cat":"系统信息"},{"type":"cmd","answers":["whoami"],"meaning":"我是谁","en":"who am I","cat":"系统信息"},{"type":"cmd","answers":["id"],"meaning":"身份信息","en":"identity","cat":"系统信息"},{"type":"cmd","answers":["who"],"meaning":"谁（登录用户）","en":"who","cat":"系统信息"},{"type":"cmd","answers":["w"],"meaning":"登录用户+正在做什么","en":"who 增强版","cat":"系统信息"},{"type":"cmd","answers":["echo"],"meaning":"回显（输出）","en":"echo","cat":"系统信息"},{"type":"cmd","answers":["printf"],"meaning":"格式化输出","en":"print formatted","cat":"系统信息"},{"type":"cmd","answers":["env"],"meaning":"环境变量","en":"environment","cat":"系统信息"},{"type":"cmd","answers":["export"],"meaning":"导出变量","en":"export","cat":"系统信息"},{"type":"cmd","answers":["printenv"],"meaning":"打印环境变量","en":"print environment","cat":"系统信息"},{"type":"cmd","answers":["lscpu"],"meaning":"列出 CPU 信息","en":"list cpu","cat":"硬件"},{"type":"cmd","answers":["free"],"meaning":"空闲（内存）","en":"free","cat":"硬件"},{"type":"cmd","answers":["df"],"meaning":"磁盘剩余","en":"disk free","cat":"硬件"},{"type":"cmd","answers":["du"],"meaning":"磁盘占用","en":"disk usage","cat":"硬件"},{"type":"cmd","answers":["lsblk"],"meaning":"块设备列表","en":"list block devices","cat":"硬件"},{"type":"cmd","answers":["lspci"],"meaning":"PCI 设备","en":"list pci","cat":"硬件"},{"type":"cmd","answers":["lsusb"],"meaning":"USB 设备","en":"list usb","cat":"硬件"},{"type":"cmd","answers":["lshw"],"meaning":"硬件总览","en":"list hardware","cat":"硬件"},{"type":"cmd","answers":["dmidecode"],"meaning":"硬件信息解码","en":"DMI decode","cat":"硬件"},{"type":"cmd","answers":["sensors"],"meaning":"传感器（温度）","en":"sensors","cat":"硬件"},{"type":"cmd","answers":["hdparm"],"meaning":"硬盘参数","en":"hard disk parameter","cat":"硬件"},{"type":"cmd","answers":["smartctl"],"meaning":"硬盘健康检查","en":"SMART control","cat":"硬件"},{"type":"cmd","answers":["ps"],"meaning":"进程状态","en":"process status","cat":"进程"},{"type":"cmd","answers":["top"],"meaning":"实时监控","en":"top","cat":"进程"},{"type":"cmd","answers":["htop"],"meaning":"人性化监控","en":"human top","cat":"进程"},{"type":"cmd","answers":["pstree"],"meaning":"进程树","en":"process tree","cat":"进程"},{"type":"cmd","answers":["pgrep"],"meaning":"按名找进程","en":"process grep","cat":"进程"},{"type":"cmd","answers":["pidof"],"meaning":"进程 PID","en":"PID of","cat":"进程"},{"type":"cmd","answers":["kill"],"meaning":"发送信号（杀进程）","en":"kill","cat":"进程"},{"type":"cmd","answers":["killall"],"meaning":"按名终止","en":"kill all","cat":"进程"},{"type":"cmd","answers":["pkill"],"meaning":"按模式终止","en":"process kill","cat":"进程"},{"type":"cmd","answers":["nice","renice"],"meaning":"优先级（友好度）","en":"nice","cat":"进程"},{"type":"cmd","answers":["nohup"],"meaning":"不挂断","en":"no hangup","cat":"进程"},{"type":"cmd","answers":["disown"],"meaning":"脱离终端","en":"disown","cat":"进程"},{"type":"cmd","answers":["timeout"],"meaning":"限时运行","en":"timeout","cat":"进程"},{"type":"cmd","answers":["watch"],"meaning":"周期观察","en":"watch","cat":"进程"},{"type":"cmd","answers":["lsof"],"meaning":"打开的文件列表","en":"list open files","cat":"进程"},{"type":"cmd","answers":["fuser"],"meaning":"文件使用者","en":"file user","cat":"进程"},{"type":"cmd","answers":["strace"],"meaning":"系统调用追踪","en":"system call trace","cat":"进程"},{"type":"cmd","answers":["ltrace"],"meaning":"库调用追踪","en":"library trace","cat":"进程"},{"type":"cmd","answers":["systemctl"],"meaning":"系统控制","en":"system control","cat":"服务"},{"type":"cmd","answers":["service"],"meaning":"服务（旧版）","en":"service","cat":"服务"},{"type":"cmd","answers":["journalctl"],"meaning":"日志控制","en":"journal control","cat":"服务"},{"type":"cmd","answers":["init"],"meaning":"初始化","en":"initialization","cat":"服务"},{"type":"cmd","answers":["shutdown"],"meaning":"关机","en":"shutdown","cat":"服务"},{"type":"cmd","answers":["reboot"],"meaning":"重启","en":"reboot","cat":"服务"},{"type":"cmd","answers":["halt"],"meaning":"停止","en":"halt","cat":"服务"},{"type":"cmd","answers":["fdisk"],"meaning":"磁盘分区","en":"fixed disk","cat":"磁盘"},{"type":"cmd","answers":["parted"],"meaning":"分区编辑器","en":"partition editor","cat":"磁盘"},{"type":"cmd","answers":["mkfs"],"meaning":"创建文件系统（格式化）","en":"make filesystem","cat":"磁盘"},{"type":"cmd","answers":["mount","umount"],"meaning":"挂载/卸载","en":"mount / unmount","cat":"磁盘"},{"type":"cmd","answers":["blkid"],"meaning":"块设备标识","en":"block id","cat":"磁盘"},{"type":"cmd","answers":["fsck"],"meaning":"文件系统检查","en":"file system check","cat":"磁盘"},{"type":"cmd","answers":["dd"],"meaning":"数据复制","en":"data definition","cat":"磁盘"},{"type":"cmd","answers":["sync"],"meaning":"同步（刷缓存）","en":"sync","cat":"磁盘"},{"type":"cmd","answers":["badblocks"],"meaning":"坏块检测","en":"bad blocks","cat":"磁盘"},{"type":"cmd","answers":["ip"],"meaning":"网络配置","en":"internet protocol","cat":"网络"},{"type":"cmd","answers":["ifconfig"],"meaning":"接口配置","en":"interface config","cat":"网络"},{"type":"cmd","answers":["ping"],"meaning":"连通性测试","en":"ping","cat":"网络"},{"type":"cmd","answers":["traceroute"],"meaning":"追踪路由","en":"trace route","cat":"网络"},{"type":"cmd","answers":["mtr"],"meaning":"持续路由追踪","en":"my traceroute","cat":"网络"},{"type":"cmd","answers":["ss"],"meaning":"套接字统计","en":"socket statistics","cat":"网络"},{"type":"cmd","answers":["netstat"],"meaning":"网络统计","en":"network statistics","cat":"网络"},{"type":"cmd","answers":["curl"],"meaning":"网络请求工具","en":"client URL","cat":"网络"},{"type":"cmd","answers":["wget"],"meaning":"下载工具","en":"web get","cat":"网络"},{"type":"cmd","answers":["dig"],"meaning":"DNS 查询","en":"domain information groper","cat":"网络"},{"type":"cmd","answers":["nslookup"],"meaning":"DNS 查询（旧）","en":"name server lookup","cat":"网络"},{"type":"cmd","answers":["host"],"meaning":"DNS 查询（简）","en":"host","cat":"网络"},{"type":"cmd","answers":["ssh"],"meaning":"安全远程登录","en":"secure shell","cat":"网络"},{"type":"cmd","answers":["scp"],"meaning":"安全复制","en":"secure copy","cat":"网络"},{"type":"cmd","answers":["rsync"],"meaning":"远程同步","en":"remote sync","cat":"网络"},{"type":"cmd","answers":["sftp"],"meaning":"安全文件传输","en":"secure FTP","cat":"网络"},{"type":"cmd","answers":["nc"],"meaning":"网络瑞士军刀","en":"netcat","cat":"网络"},{"type":"cmd","answers":["tcpdump"],"meaning":"抓包","en":"tcp dump","cat":"网络"},{"type":"cmd","answers":["nmap"],"meaning":"端口扫描","en":"network mapper","cat":"网络"},{"type":"cmd","answers":["ufw"],"meaning":"简易防火墙","en":"uncomplicated firewall","cat":"网络"},{"type":"cmd","answers":["iptables"],"meaning":"IP 防火墙","en":"IP tables","cat":"网络"},{"type":"cmd","answers":["ethtool"],"meaning":"网卡工具","en":"ethernet tool","cat":"网络"},{"type":"cmd","answers":["useradd"],"meaning":"添加用户","en":"user add","cat":"用户"},{"type":"cmd","answers":["userdel"],"meaning":"删除用户","en":"user delete","cat":"用户"},{"type":"cmd","answers":["usermod"],"meaning":"修改用户","en":"user modify","cat":"用户"},{"type":"cmd","answers":["passwd"],"meaning":"密码","en":"password","cat":"用户"},{"type":"cmd","answers":["chage"],"meaning":"密码有效期","en":"change age","cat":"用户"},{"type":"cmd","answers":["groupadd","groupdel","groupmod"],"meaning":"组管理","en":"group add/delete/modify","cat":"用户"},{"type":"cmd","answers":["gpasswd"],"meaning":"组成员管理","en":"group passwd","cat":"用户"},{"type":"cmd","answers":["groups"],"meaning":"所属组","en":"groups","cat":"用户"},{"type":"cmd","answers":["su"],"meaning":"切换用户","en":"switch user","cat":"用户"},{"type":"cmd","answers":["sudo"],"meaning":"以超级用户执行","en":"superuser do","cat":"用户"},{"type":"cmd","answers":["visudo"],"meaning":"编辑 sudo 配置","en":"visual sudo","cat":"用户"},{"type":"cmd","answers":["chsh"],"meaning":"更改登录 Shell","en":"change shell","cat":"用户"},{"type":"cmd","answers":["newgrp"],"meaning":"切换主组","en":"new group","cat":"用户"},{"type":"cmd","answers":["crontab"],"meaning":"定时任务表","en":"cron table","cat":"定时任务"},{"type":"cmd","answers":["at"],"meaning":"一次性定时任务","en":"at","cat":"定时任务"},{"type":"cmd","answers":["batch"],"meaning":"负载低时执行","en":"batch","cat":"定时任务"},{"type":"cmd","answers":["anacron"],"meaning":"关机补跑任务","en":"anachronistic cron","cat":"定时任务"},{"type":"cmd","answers":["apt"],"meaning":"高级包工具","en":"advanced package tool","cat":"包管理"},{"type":"cmd","answers":["apt-get"],"meaning":"apt 底层接口","en":"apt get","cat":"包管理"},{"type":"cmd","answers":["dpkg"],"meaning":"Debian 包管理","en":"Debian package","cat":"包管理"},{"type":"cmd","answers":["snap"],"meaning":"通用软件包","en":"snap","cat":"包管理"},{"type":"cmd","answers":["flatpak"],"meaning":"通用软件包","en":"flatpak","cat":"包管理"},{"type":"cmd","answers":["yum"],"meaning":"红帽系包管理","en":"yellowdog updater","cat":"包管理"},{"type":"cmd","answers":["rpm"],"meaning":"红帽包管理","en":"RedHat package manager","cat":"包管理"},{"type":"cmd","answers":["pacman"],"meaning":"Arch 包管理","en":"package manager","cat":"包管理"},{"type":"cmd","answers":["make","cmake"],"meaning":"编译工具","en":"make","cat":"包管理"},{"type":"cmd","answers":["vim","vi"],"meaning":"增强版 vi 编辑器","en":"vi improved","cat":"编辑器/Shell"},{"type":"cmd","answers":["nano"],"meaning":"简易编辑器","en":"nano","cat":"编辑器/Shell"},{"type":"cmd","answers":["emacs"],"meaning":"编辑器","en":"emacs","cat":"编辑器/Shell"},{"type":"cmd","answers":["alias"],"meaning":"别名","en":"alias","cat":"编辑器/Shell"},{"type":"cmd","answers":["history"],"meaning":"历史命令","en":"history","cat":"编辑器/Shell"},{"type":"cmd","answers":["source"],"meaning":"加载脚本","en":"source","cat":"编辑器/Shell"},{"type":"cmd","answers":["unset"],"meaning":"撤销变量","en":"unset","cat":"编辑器/Shell"},{"type":"cmd","answers":["read"],"meaning":"读取输入","en":"read","cat":"编辑器/Shell"},{"type":"cmd","answers":["test"],"meaning":"条件判断","en":"test","cat":"编辑器/Shell"},{"type":"cmd","answers":["exec"],"meaning":"替换进程执行","en":"execute","cat":"编辑器/Shell"},{"type":"cmd","answers":["shift"],"meaning":"参数移位","en":"shift","cat":"编辑器/Shell"},{"type":"cmd","answers":["declare"],"meaning":"变量声明","en":"declare","cat":"编辑器/Shell"},{"type":"cmd","answers":["trap"],"meaning":"信号捕捉","en":"trap","cat":"编辑器/Shell"},{"type":"cmd","answers":["exit"],"meaning":"退出","en":"exit","cat":"编辑器/Shell"},{"type":"cmd","answers":["sleep"],"meaning":"延时","en":"sleep","cat":"编辑器/Shell"},{"type":"cmd","answers":["bc"],"meaning":"计算器","en":"basic calculator","cat":"编辑器/Shell"},{"type":"cmd","answers":["expr"],"meaning":"表达式计算","en":"expression","cat":"编辑器/Shell"},{"type":"cmd","answers":["seq"],"meaning":"序列","en":"sequence","cat":"编辑器/Shell"},{"type":"cmd","answers":["shuf"],"meaning":"随机打乱","en":"shuffle","cat":"编辑器/Shell"},{"type":"cmd","answers":["yes"],"meaning":"持续输出 y","en":"yes","cat":"编辑器/Shell"},{"type":"cmd","answers":["true","false"],"meaning":"真/假","en":"true / false","cat":"编辑器/Shell"},{"type":"cmd","answers":["clear"],"meaning":"清屏","en":"clear","cat":"编辑器/Shell"},{"type":"cmd","answers":["set"],"meaning":"Shell 选项设置","en":"set","cat":"排障/安全"},{"type":"cmd","answers":["dmesg"],"meaning":"内核日志","en":"diagnostic message","cat":"排障/安全"},{"type":"cmd","answers":["sysctl"],"meaning":"内核参数","en":"system control","cat":"排障/安全"},{"type":"cmd","answers":["ulimit"],"meaning":"资源限制","en":"user limit","cat":"排障/安全"},{"type":"cmd","answers":["vmstat"],"meaning":"虚拟内存统计","en":"virtual memory stat","cat":"排障/安全"},{"type":"cmd","answers":["iostat"],"meaning":"磁盘 IO 统计","en":"IO stat","cat":"排障/安全"},{"type":"cmd","answers":["sar"],"meaning":"系统活动报告","en":"system activity reporter","cat":"排障/安全"},{"type":"cmd","answers":["ac"],"meaning":"登录时长统计","en":"access","cat":"排障/安全"},{"type":"cmd","answers":["screen"],"meaning":"终端复用","en":"screen","cat":"排障/安全"},{"type":"cmd","answers":["tmux"],"meaning":"终端复用器","en":"terminal multiplexer","cat":"排障/安全"},{"type":"cmd","answers":["script"],"meaning":"录制终端会话","en":"script","cat":"排障/安全"},{"type":"cmd","answers":["openssl"],"meaning":"加密工具","en":"open ssl","cat":"排障/安全"},{"type":"cmd","answers":["sha256sum","md5sum"],"meaning":"校验和","en":"SHA256 sum / MD5 sum","cat":"排障/安全"},{"type":"cmd","answers":["gpg"],"meaning":"加密","en":"GNU privacy guard","cat":"排障/安全"},{"type":"cmd","answers":["fail2ban"],"meaning":"防暴力破解","en":"fail to ban","cat":"排障/安全"},{"type":"flag","answers":["-a"],"meaning":"全部 / 追加","en":"all / append","cat":"参数速记"},{"type":"flag","answers":["-r"],"meaning":"递归","en":"recursive","cat":"参数速记"},{"type":"flag","answers":["-f"],"meaning":"强制 / 文件名","en":"force / file","cat":"参数速记"},{"type":"flag","answers":["-v"],"meaning":"详细显示","en":"verbose","cat":"参数速记"},{"type":"flag","answers":["-i"],"meaning":"交互确认 / 忽略大小写","en":"interactive / ignore case","cat":"参数速记"},{"type":"flag","answers":["-n"],"meaning":"数量","en":"number","cat":"参数速记"},{"type":"flag","answers":["-h"],"meaning":"人类可读（K/M/G 单位）","en":"human-readable","cat":"参数速记"},{"type":"flag","answers":["-p"],"meaning":"端口 / 密码 / 进程","en":"port / password / process","cat":"参数速记"},{"type":"flag","answers":["-d"],"meaning":"目录 / 删除 / 分隔符","en":"directory / delete / delimiter","cat":"参数速记"},{"type":"flag","answers":["-t"],"meaning":"时间 / 类型 / 制表位","en":"time / type / tab","cat":"参数速记"},{"type":"flag","answers":["-u"],"meaning":"用户 / 更新","en":"user / update","cat":"参数速记"},{"type":"flag","answers":["-g"],"meaning":"组 / 全局","en":"group / global","cat":"参数速记"},{"type":"flag","answers":["-o"],"meaning":"输出 / 排序","en":"output / order","cat":"参数速记"},{"type":"flag","answers":["-s"],"meaning":"大小 / 静默 / 汇总","en":"size / silent / summarize","cat":"参数速记"},{"type":"flag","answers":["-e"],"meaning":"编辑 / 表达式 / 所有","en":"edit / expression / every","cat":"参数速记"},{"type":"flag","answers":["-l"],"meaning":"列表 / 长格式 / 行","en":"list / long / lines","cat":"参数速记"},{"type":"flag","answers":["-R"],"meaning":"递归（大写变体）","en":"recursive","cat":"参数速记"},{"type":"flag","answers":["-x"],"meaning":"解压 / 执行","en":"extract / execute","cat":"参数速记"},{"type":"flag","answers":["-c"],"meaning":"创建 / 计数 / 字符","en":"create / count / characters","cat":"参数速记"},{"type":"flag","answers":["-m"],"meaning":"权限模式 / 兆字节 / 分钟","en":"mode / megabytes / minutes","cat":"参数速记"},{"type":"flag","answers":["-w"],"meaning":"宽度 / 写入 / 单词","en":"width / write / words","cat":"参数速记"},{"type":"flag","answers":["-P"],"meaning":"端口（大写）/ 密码","en":"port / password","cat":"参数速记"},{"type":"flag","answers":["-T"],"meaning":"类型 / 时间","en":"type / time","cat":"参数速记"},{"type":"flag","answers":["-A"],"meaning":"全部","en":"all / almost-all","cat":"参数速记"},{"type":"flag","answers":["-F"],"meaning":"强制 / 分类标记","en":"force / classify","cat":"参数速记"},{"type":"flag","answers":["-E"],"meaning":"扩展正则","en":"extended","cat":"参数速记"},{"type":"flag","answers":["-I"],"meaning":"身份 / 忽略","en":"identity / ignore","cat":"参数速记"},{"type":"cmd","answers":["git"],"meaning":"分布式版本控制工具","en":"Git","cat":"Git 版本控制","usage":"git clone <仓库地址>"},{"type":"cmd","answers":["git init"],"meaning":"初始化本地仓库","en":"initialize","cat":"Git 版本控制","usage":"git init"},{"type":"cmd","answers":["git clone"],"meaning":"克隆远程仓库到本地","en":"clone","cat":"Git 版本控制","usage":"git clone https://github.com/user/repo.git"},{"type":"cmd","answers":["git add"],"meaning":"把更改加入暂存区","en":"add","cat":"Git 版本控制","usage":"git add 文件名"},{"type":"cmd","answers":["git commit"],"meaning":"提交暂存区为一次版本","en":"commit","cat":"Git 版本控制","usage":"git commit -m \"修复 bug\""},{"type":"cmd","answers":["git push"],"meaning":"推送本地提交到远程","en":"push","cat":"Git 版本控制","usage":"git push origin main"},{"type":"cmd","answers":["git pull"],"meaning":"拉取远程更新并合并","en":"pull","cat":"Git 版本控制","usage":"git pull"},{"type":"cmd","answers":["git fetch"],"meaning":"获取远程更新（不合并）","en":"fetch","cat":"Git 版本控制","usage":"git fetch origin"},{"type":"cmd","answers":["git merge"],"meaning":"合并分支","en":"merge","cat":"Git 版本控制","usage":"git merge feature"},{"type":"cmd","answers":["git rebase"],"meaning":"变基（重放提交）","en":"rebase","cat":"Git 版本控制","usage":"git rebase main"},{"type":"cmd","answers":["git branch"],"meaning":"查看/创建分支","en":"branch","cat":"Git 版本控制","usage":"git branch dev"},{"type":"cmd","answers":["git checkout"],"meaning":"切换分支/恢复文件","en":"checkout","cat":"Git 版本控制","usage":"git checkout dev"},{"type":"cmd","answers":["git switch"],"meaning":"切换分支（新命令）","en":"switch","cat":"Git 版本控制","usage":"git switch -c 新分支"},{"type":"cmd","answers":["git status"],"meaning":"查看工作区状态","en":"status","cat":"Git 版本控制","usage":"git status"},{"type":"cmd","answers":["git log"],"meaning":"查看提交历史","en":"log","cat":"Git 版本控制","usage":"git log --oneline"},{"type":"cmd","answers":["git diff"],"meaning":"查看工作区差异","en":"diff","cat":"Git 版本控制","usage":"git diff"},{"type":"cmd","answers":["git stash"],"meaning":"暂存未提交的更改","en":"stash","cat":"Git 版本控制","usage":"git stash"},{"type":"cmd","answers":["git remote"],"meaning":"管理远程仓库","en":"remote","cat":"Git 版本控制","usage":"git remote -v"},{"type":"cmd","answers":["git tag"],"meaning":"给提交打标签","en":"tag","cat":"Git 版本控制","usage":"git tag v1.0.0"},{"type":"cmd","answers":["git reset"],"meaning":"回退版本/取消暂存","en":"reset","cat":"Git 版本控制","usage":"git reset --hard HEAD~1"},{"type":"cmd","answers":["git revert"],"meaning":"用新提交撤销旧提交","en":"revert","cat":"Git 版本控制","usage":"git revert HEAD"},{"type":"cmd","answers":["git show"],"meaning":"显示某次提交详情","en":"show","cat":"Git 版本控制","usage":"git show HEAD"},{"type":"cmd","answers":["docker"],"meaning":"容器引擎","en":"docker","cat":"容器与云","usage":"docker run -d nginx"},{"type":"cmd","answers":["docker ps"],"meaning":"列出运行中的容器","en":"process status","cat":"容器与云","usage":"docker ps -a"},{"type":"cmd","answers":["docker run"],"meaning":"运行一个容器","en":"run","cat":"容器与云","usage":"docker run -p 8080:80 nginx"},{"type":"cmd","answers":["docker build"],"meaning":"构建镜像","en":"build","cat":"容器与云","usage":"docker build -t myapp ."},{"type":"cmd","answers":["docker images"],"meaning":"列出本地镜像","en":"images","cat":"容器与云","usage":"docker images"},{"type":"cmd","answers":["docker pull"],"meaning":"拉取镜像","en":"pull","cat":"容器与云","usage":"docker pull ubuntu:22.04"},{"type":"cmd","answers":["docker push"],"meaning":"推送镜像到仓库","en":"push","cat":"容器与云","usage":"docker push user/myapp"},{"type":"cmd","answers":["docker exec"],"meaning":"进入运行中容器执行命令","en":"execute","cat":"容器与云","usage":"docker exec -it 容器ID bash"},{"type":"cmd","answers":["docker logs"],"meaning":"查看容器日志","en":"logs","cat":"容器与云","usage":"docker logs -f 容器ID"},{"type":"cmd","answers":["docker-compose"],"meaning":"多容器编排工具","en":"compose","cat":"容器与云","usage":"docker-compose up -d"},{"type":"cmd","answers":["kubectl"],"meaning":"Kubernetes 命令行工具","en":"kubernetes control","cat":"容器与云","usage":"kubectl get pods"},{"type":"cmd","answers":["helm"],"meaning":"K8s 应用包管理器","en":"helm","cat":"容器与云","usage":"helm install myapp chart"},{"type":"cmd","answers":["podman"],"meaning":"无守护进程的容器引擎","en":"pod manager","cat":"容器与云","usage":"podman run hello-world"},{"type":"cmd","answers":["minikube"],"meaning":"本地单节点 K8s","en":"mini kube","cat":"容器与云","usage":"minikube start"},{"type":"cmd","answers":["|"],"meaning":"管道：前命令输出作后命令输入","en":"pipe","cat":"Shell 技巧","usage":"cat a.txt | grep key"},{"type":"cmd","answers":[">"],"meaning":"重定向：覆盖写入文件","en":"redirect","cat":"Shell 技巧","usage":"echo hi > out.txt"},{"type":"cmd","answers":[">>"],"meaning":"重定向：追加到文件末尾","en":"append","cat":"Shell 技巧","usage":"echo hi >> log.txt"},{"type":"cmd","answers":["<"],"meaning":"重定向：从文件读取输入","en":"input redirect","cat":"Shell 技巧","usage":"sort < list.txt"},{"type":"cmd","answers":["2>"],"meaning":"把错误输出重定向到文件","en":"stderr redirect","cat":"Shell 技巧","usage":"cmd 2> error.log"},{"type":"cmd","answers":["&"],"meaning":"后台运行命令","en":"background","cat":"Shell 技巧","usage":"sleep 100 &"},{"type":"cmd","answers":["&&"],"meaning":"前命令成功才执行后命令","en":"AND operator","cat":"Shell 技巧","usage":"mkdir dir && cd dir"},{"type":"cmd","answers":["||"],"meaning":"前命令失败才执行后命令","en":"OR operator","cat":"Shell 技巧","usage":"cd dir || echo 失败"},{"type":"cmd","answers":[";"],"meaning":"顺序执行多条命令","en":"semicolon","cat":"Shell 技巧","usage":"cd /tmp; ls"},{"type":"cmd","answers":["*"],"meaning":"通配符：匹配任意字符","en":"wildcard","cat":"Shell 技巧","usage":"rm *.log"},{"type":"cmd","answers":["?"],"meaning":"通配符：匹配单个字符","en":"question mark","cat":"Shell 技巧","usage":"ls a?.txt"},{"type":"cmd","answers":["$()"],"meaning":"命令替换：先执行再取结果","en":"command substitution","cat":"Shell 技巧","usage":"echo 今天是 $(date)"},{"type":"cmd","answers":["!"],"meaning":"引用历史命令（!n / !!）","en":"history reference","cat":"Shell 技巧","usage":"!!"},{"type":"cmd","answers":["~"],"meaning":"家目录缩写","en":"home directory","cat":"Shell 技巧","usage":"cd ~/Documents"},{"type":"cmd","answers":["$?"],"meaning":"上一条命令的退出码","en":"exit status","cat":"Shell 技巧","usage":"echo $?"},{"type":"cmd","answers":["$$"],"meaning":"当前 Shell 的进程号","en":"PID","cat":"Shell 技巧","usage":"echo $$"},{"type":"cmd","answers":["rg"],"meaning":"超快正则搜索（ripgrep）","en":"ripgrep","cat":"正则与数据处理","usage":"rg pattern src/"},{"type":"cmd","answers":["jq"],"meaning":"JSON 数据处理工具","en":"JSON query","cat":"正则与数据处理","usage":"curl api | jq .name"},{"type":"cmd","answers":["fzf"],"meaning":"模糊查找选择器","en":"fuzzy finder","cat":"正则与数据处理","usage":"find . | fzf"},{"type":"cmd","answers":["fmt"],"meaning":"文本重新排版","en":"format","cat":"正则与数据处理","usage":"fmt -w 80 a.txt"},{"type":"cmd","answers":["pr"],"meaning":"分页格式化打印文件","en":"print","cat":"正则与数据处理","usage":"pr -2 a.txt"},{"type":"cmd","answers":["hd"],"meaning":"十六进制查看文件（hexdump 别名）","en":"hex dump","cat":"正则与数据处理","usage":"hd a.bin"},{"type":"cmd","answers":["ag"],"meaning":"代码全文搜索（silver searcher）","en":"silver searcher","cat":"正则与数据处理","usage":"ag keyword src"},{"type":"cmd","answers":["yq"],"meaning":"YAML 数据处理工具","en":"YAML query","cat":"正则与数据处理","usage":"yq .spec a.yaml"},{"type":"cmd","answers":["gcc"],"meaning":"GNU C 编译器","en":"GNU C compiler","cat":"编译与调试","usage":"gcc -o app main.c"},{"type":"cmd","answers":["g++"],"meaning":"GNU C++ 编译器","en":"GNU C++ compiler","cat":"编译与调试","usage":"g++ -o app main.cpp"},{"type":"cmd","answers":["clang"],"meaning":"LLVM 编译器","en":"clang","cat":"编译与调试","usage":"clang -o app main.c"},{"type":"cmd","answers":["gdb"],"meaning":"GNU 调试器","en":"GNU debugger","cat":"编译与调试","usage":"gdb ./app"},{"type":"cmd","answers":["ldd"],"meaning":"查看程序动态依赖库","en":"list dynamic dependencies","cat":"编译与调试","usage":"ldd /bin/ls"},{"type":"cmd","answers":["nm"],"meaning":"查看目标文件符号表","en":"name list","cat":"编译与调试","usage":"nm a.out"},{"type":"cmd","answers":["objdump"],"meaning":"转储目标文件信息","en":"object dump","cat":"编译与调试","usage":"objdump -d a.out"},{"type":"cmd","answers":["readelf"],"meaning":"查看 ELF 文件信息","en":"read ELF","cat":"编译与调试","usage":"readelf -h a.out"},{"type":"cmd","answers":["strip"],"meaning":"剥离二进制中的符号","en":"strip","cat":"编译与调试","usage":"strip app"},{"type":"cmd","answers":["ar"],"meaning":"创建/管理静态库","en":"archive","cat":"编译与调试","usage":"ar rcs lib.a a.o"},{"type":"cmd","answers":["iotop"],"meaning":"磁盘 IO 实时监控","en":"IO top","cat":"性能监控","usage":"iotop -o"},{"type":"cmd","answers":["iftop"],"meaning":"网络流量实时监控","en":"interface top","cat":"性能监控","usage":"iftop"},{"type":"cmd","answers":["mpstat"],"meaning":"多核 CPU 使用率统计","en":"multiprocessor statistics","cat":"性能监控","usage":"mpstat -P ALL 1"},{"type":"cmd","answers":["pidstat"],"meaning":"按进程统计资源占用","en":"PID statistics","cat":"性能监控","usage":"pidstat 1"},{"type":"cmd","answers":["glances"],"meaning":"全能系统监控面板","en":"glances","cat":"性能监控","usage":"glances"},{"type":"cmd","answers":["perf"],"meaning":"Linux 性能剖析工具","en":"performance","cat":"性能监控","usage":"perf stat ./app"},{"type":"cmd","answers":["nproc"],"meaning":"显示 CPU 核数","en":"number of processors","cat":"性能监控","usage":"nproc"},{"type":"cmd","answers":["taskset"],"meaning":"设置进程 CPU 亲和性","en":"task set","cat":"性能监控","usage":"taskset -c 0-3 ./app"},{"type":"cmd","answers":["ssh-keygen"],"meaning":"生成 SSH 密钥对","en":"SSH key generator","cat":"安全加固","usage":"ssh-keygen -t ed25519"},{"type":"cmd","answers":["ssh-copy-id"],"meaning":"把公钥安装到远程主机","en":"SSH copy ID","cat":"安全加固","usage":"ssh-copy-id user@host"},{"type":"cmd","answers":["nftables"],"meaning":"新一代防火墙框架","en":"netfilter tables","cat":"安全加固","usage":"nft list ruleset"},{"type":"cmd","answers":["firewalld"],"meaning":"动态防火墙守护进程","en":"firewall daemon","cat":"安全加固","usage":"firewall-cmd --list-all"},{"type":"cmd","answers":["auditctl"],"meaning":"配置内核审计规则","en":"audit control","cat":"安全加固","usage":"auditctl -a always,exit -S open"},{"type":"cmd","answers":["last"],"meaning":"查看最近登录历史","en":"last","cat":"安全加固","usage":"last -10"},{"type":"cmd","answers":["lastlog"],"meaning":"查看每个用户最后登录","en":"last log","cat":"安全加固","usage":"lastlog"},{"type":"cmd","answers":["getent"],"meaning":"查询系统数据库条目","en":"get entries","cat":"安全加固","usage":"getent passwd user"},{"type":"cmd","answers":["whois"],"meaning":"域名注册信息查询","en":"who is","cat":"网络补充","usage":"whois example.com"},{"type":"cmd","answers":["socat"],"meaning":"双向数据通道瑞士军刀","en":"socket cat","cat":"网络补充","usage":"socat TCP-LISTEN:8080,fork TCP:web:80"},{"type":"cmd","answers":["iperf3"],"meaning":"网络带宽测试工具","en":"iperf 3","cat":"网络补充","usage":"iperf3 -c 服务器IP"},{"type":"cmd","answers":["route"],"meaning":"查看/操作路由表","en":"route","cat":"网络补充","usage":"route -n"},{"type":"cmd","answers":["arp"],"meaning":"查看/操作 ARP 缓存","en":"address resolution protocol","cat":"网络补充","usage":"arp -a"},{"type":"cmd","answers":["resolvectl"],"meaning":"systemd 的 DNS 解析控制","en":"resolve control","cat":"网络补充","usage":"resolvectl status"},{"type":"cmd","answers":["telnet"],"meaning":"远程登录（明文，已淘汰）","en":"telnet","cat":"网络补充","usage":"telnet host 23"},{"type":"cmd","answers":["mktemp"],"meaning":"创建唯一临时文件/目录","en":"make temp","cat":"文件工具","usage":"mktemp -d"},{"type":"cmd","answers":["readlink"],"meaning":"解析符号链接的真实路径","en":"read link","cat":"文件工具","usage":"readlink -f /usr/bin/python"},{"type":"cmd","answers":["rename"],"meaning":"批量重命名文件","en":"rename","cat":"文件工具","usage":"rename \"s/.txt/.md/\" *.txt"},{"type":"cmd","answers":["shred"],"meaning":"安全擦除文件内容","en":"shred","cat":"文件工具","usage":"shred -u secret.txt"},{"type":"cmd","answers":["truncate"],"meaning":"把文件调整到指定大小","en":"truncate","cat":"文件工具","usage":"truncate -s 10M a.img"},{"type":"cmd","answers":["fallocate"],"meaning":"预分配磁盘空间","en":"fallocate","cat":"文件工具","usage":"fallocate -l 1G a.img"},{"type":"cmd","answers":["timedatectl"],"meaning":"查看/设置时间日期与时区","en":"time date control","cat":"系统工具","usage":"timedatectl set-timezone Asia/Shanghai"},{"type":"cmd","answers":["hwclock"],"meaning":"读写硬件时钟","en":"hardware clock","cat":"系统工具","usage":"hwclock --systohc"},{"type":"cmd","answers":["locale"],"meaning":"查看/设置语言区域","en":"locale","cat":"系统工具","usage":"locale -a"},{"type":"cmd","answers":["lsb_release"],"meaning":"显示发行版信息","en":"LSB release","cat":"系统工具","usage":"lsb_release -a"},{"type":"cmd","answers":["neofetch"],"meaning":"终端系统信息展示","en":"neofetch","cat":"系统工具","usage":"neofetch"},{"type":"cmd","answers":["loginctl"],"meaning":"管理系统登录会话","en":"login control","cat":"系统工具","usage":"loginctl list-sessions"},{"type":"cmd","answers":["arch"],"meaning":"显示系统架构","en":"architecture","cat":"系统工具","usage":"arch"},{"type":"cmd","answers":["dnf"],"meaning":"Fedora/RHEL 包管理器","en":"dnf","cat":"包管理补充","usage":"dnf install vim"},{"type":"cmd","answers":["zypper"],"meaning":"openSUSE 包管理器","en":"zypper","cat":"包管理补充","usage":"zypper install vim"},{"type":"cmd","answers":["brew"],"meaning":"Homebrew 包管理器","en":"homebrew","cat":"包管理补充","usage":"brew install wget"},{"type":"cmd","answers":["nix"],"meaning":"函数式包管理器","en":"nix","cat":"包管理补充","usage":"nix shell nixpkgs#hello"},{"type":"cmd","answers":["mysql"],"meaning":"MySQL 数据库客户端","en":"MySQL","cat":"数据库","usage":"mysql -u root -p"},{"type":"cmd","answers":["psql"],"meaning":"PostgreSQL 数据库客户端","en":"Postgres SQL","cat":"数据库","usage":"psql -U user -d dbname"},{"type":"cmd","answers":["sqlite3"],"meaning":"SQLite 轻量数据库客户端","en":"SQLite 3","cat":"数据库","usage":"sqlite3 my.db"},{"type":"cmd","answers":["redis-cli"],"meaning":"Redis 客户端","en":"Redis CLI","cat":"数据库","usage":"redis-cli ping"},{"type":"flag","answers":["--help"],"meaning":"显示帮助信息","en":"help","cat":"参数速记"},{"type":"flag","answers":["--version"],"meaning":"显示版本号","en":"version","cat":"参数速记"},{"type":"flag","answers":["-q"],"meaning":"静默模式（少输出）","en":"quiet","cat":"参数速记"},{"type":"flag","answers":["-z"],"meaning":"gzip 压缩 / 空行分隔","en":"gzip / zero","cat":"参数速记"},{"type":"flag","answers":["-k"],"meaning":"保留 / 保持","en":"keep","cat":"参数速记"},{"type":"flag","answers":["-j"],"meaning":"bzip2 压缩 / 并行任务数","en":"bzip2 / jobs","cat":"参数速记"},{"type":"flag","answers":["-L"],"meaning":"跟随符号链接","en":"follow links","cat":"参数速记"},{"type":"flag","answers":["-S"],"meaning":"大小写敏感 / 后缀","en":"sensitive / suffix","cat":"参数速记"},{"type":"flag","answers":["--"],"meaning":"选项结束标记（后面都是参数）","en":"end of options","cat":"参数速记","usage":"rm -- -weird-file"},{"type":"flag","answers":["-b"],"meaning":"字节 / 备份 / 后台","en":"bytes / backup / background","cat":"参数速记"},{"type":"flag","answers":["-C"],"meaning":"目录 / 彩色输出","en":"directory / color","cat":"参数速记"},{"type":"flag","answers":["-Z"],"meaning":"压缩 / 安全上下文","en":"compress / SELinux context","cat":"参数速记"}];
+// ---------- 常用命令组合（连起来用的真实命令） ----------
+const EXTRA_QUESTIONS = [
+  { type:'cmd', answers:['ls -la'], meaning:'查看目录全部内容（含隐藏文件）', en:'list all', cat:'目录文件', usage:'ls -la /home' },
+  { type:'cmd', answers:['mkdir -p'], meaning:'递归创建多级目录', en:'make dirs parents', cat:'目录文件', usage:'mkdir -p a/b/c' },
+  { type:'cmd', answers:['rm -rf'], meaning:'强制递归删除（危险！）', en:'remove force recursive', cat:'目录文件', usage:'rm -rf /tmp/old' },
+  { type:'cmd', answers:['cp -r'], meaning:'递归复制目录', en:'copy recursive', cat:'目录文件', usage:'cp -r src backup' },
+  { type:'cmd', answers:['chmod +x'], meaning:'给文件添加执行权限', en:'change mode add execute', cat:'权限', usage:'chmod +x run.sh' },
+  { type:'cmd', answers:['tail -f'], meaning:'实时跟踪查看文件尾部（看日志）', en:'tail follow', cat:'内容查看', usage:'tail -f /var/log/syslog' },
+  { type:'cmd', answers:['head -n'], meaning:'查看文件前 N 行', en:'head number', cat:'内容查看', usage:'head -n 20 server.log' },
+  { type:'cmd', answers:['grep -r'], meaning:'在目录中递归搜索文本', en:'grep recursive', cat:'文本处理', usage:'grep -r "error" ./src' },
+  { type:'cmd', answers:['grep -i'], meaning:'忽略大小写搜索', en:'grep ignore case', cat:'文本处理', usage:'grep -i "root" /etc/passwd' },
+  { type:'cmd', answers:['grep -v'], meaning:'反向搜索（排除匹配行）', en:'grep invert', cat:'文本处理', usage:'ps aux | grep -v grep' },
+  { type:'cmd', answers:['find / -name'], meaning:'从根目录按名字搜索文件', en:'find by name', cat:'文件搜索', usage:'find / -name "*.conf" 2>/dev/null' },
+  { type:'cmd', answers:['find . -type f'], meaning:'按类型搜索（f=文件 d=目录）', en:'find by type', cat:'文件搜索', usage:'find . -type f -size +100M' },
+  { type:'cmd', answers:['chown user:group'], meaning:'修改文件所有者:组', en:'change owner', cat:'权限', usage:'sudo chown www:www index.html' },
+  { type:'cmd', answers:['chmod 755'], meaning:'用数字设置权限（rwxr-xr-x）', en:'change mode numeric', cat:'权限', usage:'chmod 755 run.sh' },
+  { type:'cmd', answers:['tar -czvf'], meaning:'打包并压缩（gzip）', en:'tape archive compress', cat:'压缩', usage:'tar -czvf app.tar.gz ./app' },
+  { type:'cmd', answers:['tar -xzvf'], meaning:'解压 tar.gz 包', en:'extract gzip', cat:'压缩', usage:'tar -xzvf app.tar.gz' },
+  { type:'cmd', answers:['zip -r'], meaning:'递归压缩为 zip', en:'zip recursive', cat:'压缩', usage:'zip -r backup.zip ./docs' },
+  { type:'cmd', answers:['unzip -d'], meaning:'解压 zip 到指定目录', en:'unzip to dir', cat:'压缩', usage:'unzip -d ./out file.zip' },
+  { type:'cmd', answers:['ps aux'], meaning:'查看所有进程详细信息', en:'process status all', cat:'进程', usage:'ps aux | grep nginx' },
+  { type:'cmd', answers:['kill -9'], meaning:'强制结束进程', en:'kill signal 9', cat:'进程', usage:'kill -9 1234' },
+  { type:'cmd', answers:['pgrep nginx'], meaning:'按名字查找进程 PID', en:'process grep', cat:'进程', usage:'pgrep -f "nginx" && echo 运行中' },
+  { type:'cmd', answers:['systemctl restart'], meaning:'重启系统服务', en:'system control restart', cat:'服务', usage:'sudo systemctl restart nginx' },
+  { type:'cmd', answers:['systemctl start'], meaning:'启动系统服务', en:'system control start', cat:'服务', usage:'sudo systemctl start mysql' },
+  { type:'cmd', answers:['systemctl stop'], meaning:'停止系统服务', en:'system control stop', cat:'服务', usage:'sudo systemctl stop nginx' },
+  { type:'cmd', answers:['systemctl enable'], meaning:'设置服务开机自启', en:'system control enable', cat:'服务', usage:'sudo systemctl enable docker' },
+  { type:'cmd', answers:['systemctl status'], meaning:'查看服务运行状态', en:'system control status', cat:'服务', usage:'systemctl status sshd' },
+  { type:'cmd', answers:['ping baidu.com'], meaning:'测试网络连通性', en:'ping', cat:'网络', usage:'ping -c 4 baidu.com' },
+  { type:'cmd', answers:['ssh user@host'], meaning:'SSH 远程连接服务器', en:'secure shell', cat:'网络', usage:'ssh root@192.168.1.10' },
+  { type:'cmd', answers:['scp file user@host:/path'], meaning:'远程复制文件到服务器', en:'secure copy', cat:'网络', usage:'scp app.tar.gz root@1.2.3.4:/root/' },
+  { type:'cmd', answers:['curl -o'], meaning:'用 curl 下载保存文件', en:'client URL output', cat:'网络', usage:'curl -o app.zip http://example.com/app.zip' },
+  { type:'cmd', answers:['wget -O'], meaning:'用 wget 下载并另存为', en:'web get output', cat:'网络', usage:'wget -O app.tar.gz http://example.com/a.tar.gz' },
+  { type:'cmd', answers:['netstat -tlnp'], meaning:'查看端口监听情况', en:'network statistics', cat:'网络', usage:'netstat -tlnp | grep 80' },
+  { type:'cmd', answers:['ip addr'], meaning:'查看网卡 IP 地址', en:'ip address', cat:'网络', usage:'ip addr show' },
+  { type:'cmd', answers:['sudo apt install'], meaning:'安装软件包', en:'install package', cat:'包管理', usage:'sudo apt install vim' },
+  { type:'cmd', answers:['sudo apt update'], meaning:'更新软件源列表', en:'update package list', cat:'包管理', usage:'sudo apt update' },
+  { type:'cmd', answers:['sudo apt upgrade'], meaning:'升级系统已装软件', en:'upgrade packages', cat:'包管理', usage:'sudo apt upgrade -y' },
+  { type:'cmd', answers:['sudo apt remove'], meaning:'卸载软件', en:'remove package', cat:'包管理', usage:'sudo apt remove vim' },
+  { type:'cmd', answers:['sudo apt purge'], meaning:'彻底卸载软件（含配置文件）', en:'purge package', cat:'包管理', usage:'sudo apt purge vim' },
+  { type:'cmd', answers:['yum install'], meaning:'CentOS/RHEL 安装软件', en:'yum install', cat:'包管理', usage:'sudo yum install -y wget' },
+  { type:'cmd', answers:['df -h'], meaning:'查看磁盘空间（人类可读）', en:'disk free human', cat:'磁盘', usage:'df -h /' },
+  { type:'cmd', answers:['du -sh'], meaning:'统计目录占用大小', en:'disk usage summarize', cat:'磁盘', usage:'du -sh /var/log' },
+  { type:'cmd', answers:['free -h'], meaning:'查看内存使用情况', en:'free memory', cat:'系统信息', usage:'free -h' },
+  { type:'cmd', answers:['sudo useradd -m'], meaning:'创建用户并建家目录', en:'user add make', cat:'用户', usage:'sudo useradd -m alice' },
+  { type:'cmd', answers:['sudo passwd'], meaning:'修改用户密码', en:'passwd', cat:'用户', usage:'sudo passwd alice' },
+  { type:'cmd', answers:['crontab -e'], meaning:'编辑定时任务', en:'cron table edit', cat:'定时任务', usage:'crontab -e' },
+  { type:'cmd', answers:['crontab -l'], meaning:'列出当前定时任务', en:'cron table list', cat:'定时任务', usage:'crontab -l' },
+  { type:'cmd', answers:['git clone'], meaning:'克隆远程仓库', en:'git clone', cat:'Git 版本控制', usage:'git clone https://github.com/user/repo.git' },
+  { type:'cmd', answers:['git add .'], meaning:'添加所有改动到暂存区', en:'git add all', cat:'Git 版本控制', usage:'git add .' },
+  { type:'cmd', answers:['git commit -m'], meaning:'提交改动并写说明', en:'git commit message', cat:'Git 版本控制', usage:'git commit -m "修复 bug"' },
+  { type:'cmd', answers:['git push'], meaning:'推送到远程仓库', en:'git push', cat:'Git 版本控制', usage:'git push origin main' },
+  { type:'cmd', answers:['git pull'], meaning:'拉取远程更新', en:'git pull', cat:'Git 版本控制', usage:'git pull origin main' },
+  { type:'cmd', answers:['git log --oneline'], meaning:'查看简洁提交历史', en:'git log one line', cat:'Git 版本控制', usage:'git log --oneline -10' },
+  { type:'cmd', answers:['git checkout -b'], meaning:'新建并切换分支', en:'git checkout branch', cat:'Git 版本控制', usage:'git checkout -b feature/x' },
+  { type:'cmd', answers:['docker run -d'], meaning:'后台运行容器', en:'docker run detached', cat:'容器与云', usage:'docker run -d -p 80:80 nginx' },
+  { type:'cmd', answers:['docker ps -a'], meaning:'查看所有容器', en:'docker process status', cat:'容器与云', usage:'docker ps -a' },
+  { type:'cmd', answers:['docker logs'], meaning:'查看容器日志', en:'docker logs', cat:'容器与云', usage:'docker logs -f myapp' },
+  { type:'cmd', answers:['kubectl get pods'], meaning:'查看 Kubernetes Pod', en:'kubectl get pods', cat:'容器与云', usage:'kubectl get pods -n prod' },
+  { type:'cmd', answers:['vim file'], meaning:'用 vim 编辑文件', en:'vi editor', cat:'编辑器/Shell', usage:'vim /etc/hosts' },
+  { type:'cmd', answers:['nano file'], meaning:'用 nano 编辑文件（新手友好）', en:'nano editor', cat:'编辑器/Shell', usage:'nano /etc/hosts' },
+  { type:'cmd', answers:['echo $PATH'], meaning:'查看环境变量 PATH', en:'echo path', cat:'Shell 技巧', usage:'echo $PATH' },
+  { type:'cmd', answers:['source ~/.bashrc'], meaning:'重新加载 shell 配置', en:'source config', cat:'Shell 技巧', usage:'source ~/.bashrc' },
+  { type:'cmd', answers:['export PATH=$PATH:/dir'], meaning:'添加目录到 PATH 环境变量', en:'export path', cat:'Shell 技巧', usage:'export PATH=$PATH:/usr/local/bin' },
+  { type:'cmd', answers:['cat file | grep'], meaning:'管道过滤文件内容', en:'pipe grep', cat:'正则与数据处理', usage:'cat log.txt | grep "error"' },
+  { type:'cmd', answers:['history | grep'], meaning:'搜索历史命令', en:'history grep', cat:'Shell 技巧', usage:'history | grep ssh' },
+  { type:'cmd', answers:['mysql -u root -p'], meaning:'连接 MySQL 数据库', en:'mysql client', cat:'数据库', usage:'mysql -u root -p' },
+  { type:'cmd', answers:['redis-cli'], meaning:'连接 Redis 数据库', en:'redis client', cat:'数据库', usage:'redis-cli ping' },
+  { type:'cmd', answers:['systemctl'], meaning:'管理系统服务', en:'system control', cat:'服务', usage:'sudo systemctl list-units --type=service' },
+  { type:'cmd', answers:['gzip -d'], meaning:'解压 .gz 文件', en:'gzip decompress', cat:'压缩', usage:'gzip -d archive.gz' },
+  { type:'cmd', answers:['tar -tf'], meaning:'查看压缩包内容（不解压）', en:'tar list files', cat:'压缩', usage:'tar -tf app.tar.gz' }
+];
+QUESTIONS.push(...EXTRA_QUESTIONS);
 document.getElementById('footer-count').textContent = QUESTIONS.length;
+
+// ---------- 常用命令参数速查 ----------
+const PARAMS = {
+  'ls': ['-l 长格式', '-a 显示隐藏', '-h 人类可读', '-R 递归', '-t 按时间排序', '-S 按大小排序'],
+  'cd': ['- 回到上次目录', '~ 回到家目录', '.. 上级目录'],
+  'pwd': ['-L 逻辑路径', '-P 物理路径'],
+  'mkdir': ['-p 递归创建', '-m 指定权限', '-v 显示过程'],
+  'rm': ['-r 递归删除', '-f 强制', '-i 逐个确认', '-v 显示过程'],
+  'cp': ['-r 递归复制', '-i 覆盖确认', '-p 保留属性', '-a 归档复制'],
+  'mv': ['-i 覆盖确认', '-f 强制', '-n 不覆盖'],
+  'touch': ['-a 改访问时间', '-m 改修改时间', '-d 指定时间'],
+  'ln': ['-s 软链接', '-f 强制创建', '-v 显示'],
+  'cat': ['-n 显示行号', '-b 非空行号', '-s 压缩空行', '-A 显示所有字符'],
+  'less': ['-N 显示行号', '-S 截断长行', '-m 显示百分比'],
+  'head': ['-n 前N行', '-c 前N字节'],
+  'tail': ['-f 实时跟踪', '-n 后N行', '-F 文件轮转跟踪'],
+  'nl': ['-ba 全部行编号', '-s 行号分隔符'],
+  'sort': ['-n 按数值', '-r 倒序', '-u 去重', '-k 按列'],
+  'uniq': ['-c 统计次数', '-d 只显重复', '-u 只显唯一'],
+  'wc': ['-l 行数', '-w 单词数', '-c 字节数'],
+  'grep': ['-i 忽略大小写', '-r 递归', '-n 行号', '-v 反向', '-c 计数', '-l 只列文件名'],
+  'find': ['-name 按名', '-type 按类型', '-size 按大小', '-mtime 按修改时间', '-exec 执行命令'],
+  'chmod': ['-R 递归', '755/644 数字法', 'u+x 符号法'],
+  'chown': ['-R 递归', 'user:group 所有者和组'],
+  'tar': ['-c 打包', '-x 解包', '-z gzip压缩', '-v 显示', '-f 指定文件', '-C 解压目录', '-t 查看内容'],
+  'zip': ['-r 递归', '-q 安静模式'],
+  'unzip': ['-d 解压目录', '-o 覆盖'],
+  'gzip': ['-d 解压', '-k 保留源文件', '-9 最高压缩'],
+  'ps': ['-e 所有进程', '-f 完整格式', '-aux 所有用户'],
+  'kill': ['-9 强制结束', '-15 正常结束', '-l 列出信号'],
+  'top': ['-d 刷新间隔', '-p 指定PID', '-b 批处理模式'],
+  'free': ['-h 人类可读', '-m 以MB显示', '-s 周期刷新'],
+  'df': ['-h 人类可读', '-T 文件系统类型', '-i 显示inode'],
+  'du': ['-s 汇总', '-h 人类可读', '-a 显示全部文件'],
+  'mount': ['-t 指定类型', '-o 挂载选项'],
+  'ping': ['-c 次数', '-i 间隔秒', '-W 超时秒'],
+  'ifconfig': ['-a 显示所有网卡'],
+  'ip': ['addr 查看地址', 'route 查看路由', 'link 查看链路', 'add/del 增删IP'],
+  'netstat': ['-t TCP', '-l 监听', '-n 数字显示', '-p 显示进程'],
+  'ss': ['-t TCP', '-l 监听', '-n 数字', '-p 进程'],
+  'curl': ['-o 保存文件', '-L 跟随跳转', '-I 只看响应头', '-X 指定方法', '-d 提交数据', '-H 自定义头'],
+  'wget': ['-O 另存为', '-c 断点续传', '-q 安静', '-r 递归'],
+  'ssh': ['-p 指定端口', '-i 指定密钥', '-v 调试'],
+  'scp': ['-r 递归复制', '-P 指定端口'],
+  'systemctl': ['start 启动', 'stop 停止', 'restart 重启', 'enable 开机自启', 'disable 取消自启', 'status 查看状态'],
+  'useradd': ['-m 创建家目录', '-s 指定shell', '-g 主组', '-G 附加组'],
+  'userdel': ['-r 连同家目录删除'],
+  'passwd': ['-l 锁定账号', '-u 解锁', '-d 删除密码'],
+  'usermod': ['-aG 追加到组', '-s 改shell'],
+  'crontab': ['-e 编辑', '-l 列出', '-r 删除', '-u 指定用户'],
+  'sudo': ['-u 指定用户执行', '-i 登录式shell'],
+  'su': ['- 登录式切换', '-l 登录shell'],
+  'uname': ['-a 全部信息', '-r 内核版本'],
+  'date': ['+%Y%m%d 格式化', '-s 设置时间'],
+  'apt': ['update 更新源', 'install 安装', 'remove 卸载', 'purge 彻底卸载', 'upgrade 升级', 'autoremove 清理'],
+  'yum': ['install 安装', 'remove 卸载', 'update 升级', 'list 列出'],
+  'git': ['clone 克隆', 'add 暂存', 'commit 提交', 'push 推送', 'pull 拉取', 'log 历史', 'status 状态', 'branch 分支', 'checkout 切换', 'merge 合并'],
+  'docker': ['run 运行', 'ps 查看', 'images 镜像', 'pull 拉取', 'exec 进入', 'logs 日志', 'stop 停止', 'rm 删除'],
+  'kubectl': ['get 查看资源', 'describe 详情', 'logs 日志', 'apply 应用', 'delete 删除'],
+  'mysql': ['-u 用户', '-p 密码', '-h 主机', '-e 直接执行'],
+  'make': ['-j 并行任务数', '-C 切换目录', 'clean 清理'],
+  'gcc': ['-o 输出文件', '-Wall 全警告', '-g 调试信息', '-O2 优化'],
+  'sed': ['-n 安静输出', '-e 多个表达式', '-i 直接改文件', '-r 扩展正则'],
+  'awk': ['-F 指定分隔符', '-v 传变量'],
+  'cut': ['-d 分隔符', '-f 取字段', '-c 按字符'],
+  'tr': ['-d 删除字符', '-s 压缩重复'],
+  'history': ['n 显示最近n条', '-c 清空历史', '-d 删除某条'],
+  'echo': ['-n 不换行', '-e 启用转义'],
+  'export': ['-p 显示所有变量', 'VAR=val 设置'],
+  'stat': ['-c 自定义格式', '-f 文件系统信息'],
+  'lsblk': ['-f 文件系统', '-o 指定列'],
+  'fdisk': ['-l 列出分区', '-u 以扇区'],
+  'rsync': ['-a 归档', '-v 显示', '-z 压缩', '-P 进度+断点续传'],
+  'uptime': ['-p 友好格式', '-s 启动时间'],
+  'watch': ['-n 刷新间隔', '-d 高亮变化'],
+  'dig': ['-t 查询类型', '+short 简洁输出'],
+  'nohup': ['& 后台运行', '>log 重定向日志']
+};
+function paramsHtml(q) {
+  const p = PARAMS[q.answers[0]] || null;
+  if (!p || !p.length) return '';
+  return '<div class="param-line">📌 常用参数：' + p.map(x => escapeHtml(x)).join('　·　') + '</div>';
+}
+
+// ---------- Linux 快捷键大全 ----------
+const SHORTCUTS = [
+  { group: '终端基本操作', items: [
+    { keys: 'Ctrl + C', desc: '终止当前正在运行的命令' },
+    { keys: 'Ctrl + Z', desc: '把当前命令挂起到后台（可用 fg 恢复）' },
+    { keys: 'Ctrl + L', desc: '清屏（等同 clear 命令）' },
+    { keys: 'Ctrl + D', desc: '退出当前 shell（等同 exit）' },
+    { keys: 'Tab', desc: '自动补全命令、文件名、路径' },
+    { keys: 'Ctrl + Shift + C', desc: '复制选中内容' },
+    { keys: 'Ctrl + Shift + V', desc: '粘贴' },
+    { keys: 'Shift + PageUp', desc: '向上翻看终端输出' },
+    { keys: 'Shift + PageDown', desc: '向下翻看终端输出' }
+  ]},
+  { group: '命令行编辑', items: [
+    { keys: 'Ctrl + A', desc: '光标跳到行首' },
+    { keys: 'Ctrl + E', desc: '光标跳到行尾' },
+    { keys: 'Ctrl + U', desc: '删除光标前所有字符' },
+    { keys: 'Ctrl + K', desc: '删除光标后所有字符' },
+    { keys: 'Ctrl + W', desc: '删除光标前一个单词' },
+    { keys: 'Ctrl + H', desc: '删除光标前一个字符（同退格）' },
+    { keys: 'Ctrl + B / Ctrl + F', desc: '光标左移 / 右移一个字符' },
+    { keys: 'Alt + B / Alt + F', desc: '光标左移 / 右移一个单词' },
+    { keys: 'Ctrl + Y', desc: '粘贴刚才删除的内容' }
+  ]},
+  { group: '命令历史', items: [
+    { keys: '↑ / Ctrl + P', desc: '上一条历史命令' },
+    { keys: '↓ / Ctrl + N', desc: '下一条历史命令' },
+    { keys: 'Ctrl + R', desc: '反向搜索历史命令（再按一次继续搜）' },
+    { keys: 'Ctrl + G', desc: '退出历史搜索' },
+    { keys: '!!', desc: '执行上一条命令' },
+    { keys: '!$', desc: '引用上一条命令的最后一个参数' },
+    { keys: '!str', desc: '执行最近的以 str 开头的命令' },
+    { keys: 'history', desc: '查看历史命令列表' },
+    { keys: 'history -c', desc: '清空历史记录' }
+  ]},
+  { group: 'nano 编辑器', items: [
+    { keys: 'Ctrl + O', desc: '保存文件' },
+    { keys: 'Ctrl + X', desc: '退出 nano' },
+    { keys: 'Ctrl + K', desc: '剪切当前行' },
+    { keys: 'Ctrl + U', desc: '粘贴剪切的内容' },
+    { keys: 'Ctrl + W', desc: '搜索文本' },
+    { keys: 'Ctrl + ^', desc: '标记选中区域' },
+    { keys: 'Alt + U', desc: '撤销' },
+    { keys: 'Alt + E', desc: '重做' },
+    { keys: 'Ctrl + G', desc: '打开帮助' }
+  ]},
+  { group: 'vim 编辑器', items: [
+    { keys: 'i', desc: '进入插入模式（可输入）' },
+    { keys: 'Esc', desc: '返回普通模式' },
+    { keys: ':w', desc: '保存' },
+    { keys: ':q', desc: '退出' },
+    { keys: ':wq', desc: '保存并退出' },
+    { keys: ':q!', desc: '不保存强制退出' },
+    { keys: 'dd', desc: '删除当前行' },
+    { keys: 'yy', desc: '复制当前行' },
+    { keys: 'p', desc: '粘贴' },
+    { keys: 'u', desc: '撤销' },
+    { keys: '/word', desc: '向下搜索 word' },
+    { keys: 'gg', desc: '跳到文件第一行' },
+    { keys: 'G', desc: '跳到文件最后一行' },
+    { keys: ':set nu', desc: '显示行号' },
+    { keys: '0 / $', desc: '跳到行首 / 行尾' }
+  ]},
+  { group: 'screen / tmux 多窗口', items: [
+    { keys: 'screen', desc: '启动一个 screen 会话' },
+    { keys: 'Ctrl + A D', desc: '分离当前会话到后台' },
+    { keys: 'screen -r', desc: '恢复后台会话' },
+    { keys: 'tmux new -s name', desc: '新建命名 tmux 会话' },
+    { keys: 'Ctrl + B D', desc: 'tmux 分离到后台' },
+    { keys: 'tmux attach', desc: '重新进入 tmux 会话' },
+    { keys: 'Ctrl + B %', desc: 'tmux 左右分屏' },
+    { keys: 'Ctrl + B "', desc: 'tmux 上下分屏' }
+  ]},
+  { group: '桌面 / 通用（Linux 桌面版）', items: [
+    { keys: 'Ctrl + Alt + T', desc: '打开终端（Ubuntu 等）' },
+    { keys: 'Ctrl + Shift + T', desc: '终端里新建标签页' },
+    { keys: 'Ctrl + Shift + N', desc: '新建终端窗口' },
+    { keys: 'Alt + Tab', desc: '切换窗口' },
+    { keys: 'Ctrl + Alt + Delete', desc: '打开注销 / 关机菜单' },
+    { keys: 'Ctrl + Alt + F1~F6', desc: '切换纯命令行终端（TTY）' }
+  ]}
+];
+let scCat = 'all', scKeyword = '';
+function renderShortcuts() {
+  const search = document.getElementById('sc-search');
+  if (search) search.value = scKeyword;
+  const chips = document.getElementById('sc-chips');
+  const groups = SHORTCUTS.map(g => g.group);
+  chips.innerHTML = ['all', ...groups].map(c =>
+    `<button class="chip${scCat === c ? ' sel' : ''}" onclick="setScCat(${jsStr(c)})">${c === 'all' ? '全部' : escapeHtml(c)}</button>`).join('');
+  const kw = scKeyword.trim().toLowerCase();
+  const list = SHORTCUTS.map(g => ({
+    group: g.group,
+    items: g.items.filter(it =>
+      (scCat === 'all' || scCat === g.group) &&
+      (!kw || it.keys.toLowerCase().includes(kw) || it.desc.toLowerCase().includes(kw))
+    )
+  })).filter(g => g.items.length);
+  document.getElementById('sc-list').innerHTML = list.map(g =>
+    `<div class="sc-group"><h3>${escapeHtml(g.group)}</h3>` +
+    g.items.map(it => `<div class="sc-item"><span class="sc-key">${escapeHtml(it.keys)}</span><span class="sc-desc">${escapeHtml(it.desc)}</span></div>`).join('') +
+    `</div>`).join('') || '<div class="empty-tip">没有匹配的快捷键</div>';
+}
+function setScCat(c) { scCat = c; renderShortcuts(); }
+if (document.getElementById('sc-search')) {
+  document.getElementById('sc-search').addEventListener('input', e => { scKeyword = e.target.value; renderShortcuts(); });
+}
+
+// ---------- 使用说明 & 卸载 ----------
+function openManual() {
+  document.getElementById('ov-manual').classList.add('show');
+}
+function uninstallApp() {
+  if (!confirm('确定要卸载本应用吗？\n\n点击后将会：\n① 彻底删除本应用的全部学习数据\n② 尝试打开手机系统卸载界面\n\n说明：网页应用无法自己卸载自己，若系统没有弹出卸载界面，请到「设置 → 应用管理」手动卸载。')) return;
+  try { localStorage.clear(); } catch (e) {}
+  try { sessionStorage.clear(); } catch (e) {}
+  try { window.location.href = 'package:com.zxc.linuxzhan'; } catch (e) {}
+  setTimeout(function () {
+    alert('本应用数据已彻底清除。\n若系统未自动弹出卸载界面，请到手机「设置 → 应用管理 → Linux命令斩 → 卸载」。');
+  }, 900);
+}
 
 const KEY = 'linux-quiz-stats-v3';
 const CHALLENGE_KEY = 'linux-quiz-challenge';
@@ -653,6 +1001,9 @@ let round = [];          // 当前轮题目
 let qIdx = 0, score = 0, streak = 0, maxStreak = 0;
 let wrongThisRound = []; // 错题 {q, userAns}
 let skipCount = 0;
+let history = [];        // 已答题目记录 {q, ok, userAns, fbHTML, fbClass}
+let answeredCount = 0;   // 已答题数（前进边界）
+let nextTimer = null;    // 自动前进定时器
 let selectCat = 'all', roundSize = 20, hintUsed = false;
 let diff = 'basic';   // basic | pro 难度模式
 let mode = 'normal';     // normal | wrongbook
@@ -720,14 +1071,35 @@ function masteryText(m) { return m === 2 ? '已掌握' : m === 1 ? '学习中' :
 function masteryClass(m) { return m === 2 ? 'm-mastered' : m === 1 ? 'm-learning' : 'm-new'; }
 
 // ---------- 语音 & 震动 ----------
+function pickVoice(lang) {
+  try {
+    const vs = speechSynthesis.getVoices();
+    const p = (lang || 'zh-CN').toLowerCase().slice(0, 2);
+    return vs.find(v => v.lang && v.lang.toLowerCase().startsWith(p)) || vs.find(v => v.default) || null;
+  } catch (e) { return null; }
+}
 function speak(text, lang) {
   try {
-    if (!window.speechSynthesis) return;
+    if (!text || !('speechSynthesis' in window)) {
+      beep(660, 120, 'sine', 0.12);   // 无 TTS 时给个提示音
+      return;
+    }
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = lang || 'zh-CN';
     u.rate = lang === 'en-US' ? 0.85 : 0.9;
-    speechSynthesis.speak(u);
+    u.volume = 1;
+    const v = pickVoice(u.lang);
+    if (v) u.voice = v;
+    // cancel 后稍等再 speak，避免部分 WebView 吞掉第一次发音
+    setTimeout(() => { try { speechSynthesis.speak(u); } catch (e) { beep(660, 120, 'sine', 0.12); } }, 60);
+  } catch (e) {}
+}
+// 预热语音列表：部分 Android WebView 需要 voiceschanged 触发后 speechSynthesis 才可用
+if ('speechSynthesis' in window) {
+  try {
+    speechSynthesis.getVoices();
+    speechSynthesis.onvoiceschanged = function () { try { speechSynthesis.getVoices(); } catch (e) {} };
   } catch (e) {}
 }
 function vibrate(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
@@ -933,14 +1305,15 @@ document.getElementById('sound-toggle').onchange = e => { prefs.sound = e.target
 
 // ---------- 界面切换 ----------
 function showTab(t) {
-  ['quiz', 'learn', 'wrong', 'stats'].forEach(x =>
+  ['quiz', 'learn', 'wrong', 'stats', 'shortcuts'].forEach(x =>
     document.getElementById('tab-' + x).classList.toggle('active', t === x));
-  ['view-quiz', 'view-learn', 'view-wrong', 'view-stats'].forEach(x =>
+  ['view-quiz', 'view-learn', 'view-wrong', 'view-stats', 'view-shortcuts'].forEach(x =>
     document.getElementById(x).style.display = t === x.replace('view-', '') ? '' : 'none');
-  if (t !== 'quiz') stopTimer();   // 离开练习页时停掉倒计时，避免后台误判超时
+  if (t !== 'quiz') { stopTimer(); cancelNext(); }   // 离开练习页时停掉倒计时，避免后台误判超时
   if (t === 'learn') renderLearn();
   if (t === 'wrong') renderWrongBook();
   if (t === 'stats') renderStats();
+  if (t === 'shortcuts') renderShortcuts();
 }
 
 // ---------- 开始界面 ----------
@@ -990,6 +1363,7 @@ function startQuiz() {
   for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
   round = pool.slice(0, roundSize);
   qIdx = 0; score = 0; streak = 0; maxStreak = 0; wrongThisRound = []; skipCount = 0; wrongStreak = 0;
+  history = []; answeredCount = 0; cancelNext();
   document.getElementById('screen-start').style.display = 'none';
   document.getElementById('screen-result').style.display = 'none';
   document.getElementById('screen-quiz').style.display = '';
@@ -1044,6 +1418,7 @@ function renderQ() {
       `<div style="font-size:22px;font-weight:700;line-height:1.6">${escapeHtml(q.meaning)}</div>` +
       `<button class="speak-btn" style="position:static;margin-top:8px" onclick="speak(${jsStr(q.meaning)},'zh-CN')">🔊 听一下</button>`;
   }
+  updateNav();
 }
 
 function renderChoices(q) {
@@ -1098,7 +1473,8 @@ function answerChoice(btn) {
     markWrong(q, picked, 'wrong');
   }
   saveStats();
-  setTimeout(next, 1600);
+  recordAnswer(q, ok, picked);
+  scheduleNext();
 }
 
 function answerFlash(know) {
@@ -1131,7 +1507,8 @@ function answerFlash(know) {
     markWrong(q, '', 'flash');
   }
   saveStats();
-  setTimeout(next, 1500);
+  recordAnswer(q, know, '');
+  scheduleNext();
 }
 
 function graduateWrongBook(q) {
@@ -1143,7 +1520,7 @@ function graduateWrongBook(q) {
 function showFeedback(ok, html, q) {
   const fb = document.getElementById('feedback');
   fb.className = 'feedback ' + (ok ? 'correct' : 'wrong');
-  fb.innerHTML = html;
+  fb.innerHTML = html + `<br><button class="fb-speak" onclick="speak(${jsStr(q.answers[0])},'en-US')">🔊 听一遍正确命令</button>`;
 }
 
 // ---------- 限时挑战 ----------
@@ -1209,7 +1586,8 @@ function submit() {
     markWrong(q, user.trim(), 'wrong');
   }
   saveStats();
-  setTimeout(next, 1600);
+  recordAnswer(q, ok, user.trim());
+  scheduleNext();
 }
 
 function markWrong(q, userAns, reason) {
@@ -1230,6 +1608,7 @@ function markWrong(q, userAns, reason) {
   if (userAns && userAns !== '(跳过)' && userAns !== '(超时)') html += `<br>你输入了：${escapeHtml(userAns)}`;
   if (wrongStreak >= 3 && qtype === 'typing') html += `<br><span class="fb-cheer">💡 连着错 ${wrongStreak} 题了！打字不行就换「选择题」，别硬撑！</span>`;
   html += `<br><span class="fb-cheer">${COMFORT[Math.floor(Math.random() * COMFORT.length)]}</span>`;
+  html += `<br><button class="fb-speak" onclick="speak(${jsStr(q.answers[0])},'en-US')">🔊 听一遍正确命令</button>`;
   fb.innerHTML = html;
   const input = document.getElementById('answer');
   input.disabled = true;
@@ -1260,7 +1639,8 @@ function skipQ() {
   skipCount++;
   markWrong(q, '(跳过)', 'skip');
   saveStats();
-  setTimeout(next, 1400);
+  recordAnswer(q, false, '(跳过)');
+  scheduleNext();
 }
 
 function timeoutQ() {
@@ -1270,14 +1650,64 @@ function timeoutQ() {
   touchDay();
   markWrong(q, '(超时)', 'timeout');
   saveStats();
-  setTimeout(next, 1600);
+  recordAnswer(q, false, '(超时)');
+  scheduleNext();
 }
 
-function next() {
-  qIdx++;
+function recordAnswer(q, ok, userAns) {
+  const fb = document.getElementById('feedback');
+  history[qIdx] = { q, ok, userAns, fbHTML: fb.innerHTML, fbClass: fb.className };
+  answeredCount = Math.max(answeredCount, qIdx + 1);
+}
+function updateNav() {
+  const prev = document.getElementById('btn-prev');
+  const nx = document.getElementById('btn-next-q');
+  prev.disabled = qIdx <= 0;
+  if (answered) {
+    nx.style.display = '';
+    nx.textContent = answeredCount >= round.length ? '查看结果 🏁' : '下一题 ▶';
+  } else {
+    nx.style.display = 'none';
+  }
+}
+function cancelNext() { if (nextTimer) { clearTimeout(nextTimer); nextTimer = null; } }
+function scheduleNext() {
+  updateNav();
+  cancelNext();
+  nextTimer = setTimeout(goNext, 3200);   // 留足时间看清答案，也可手动点「下一题」
+}
+function goPrev() {
+  if (qIdx <= 0) return;
+  cancelNext();
+  qIdx--;
+  showReview();
+}
+function showReview() {
+  renderQ();
+  stopTimer();
+  answered = true;
+  const input = document.getElementById('answer');
+  input.disabled = true;
+  document.getElementById('btn-submit').disabled = true;
+  document.getElementById('btn-hint').style.display = 'none';
+  document.querySelectorAll('#choice-grid button').forEach(b => b.disabled = true);
+  const fr = document.querySelector('.flash-btn-row');
+  if (fr) fr.style.display = 'none';
+  const h = history[qIdx];
+  if (h) {
+    const fb = document.getElementById('feedback');
+    fb.className = h.fbClass || 'feedback wrong';
+    fb.innerHTML = h.fbHTML || '';
+  }
+  updateNav();
+}
+function goNext() {
+  cancelNext();
+  qIdx = answeredCount;
   if (qIdx >= round.length) return finish();
   renderQ();
 }
+function next() { goNext(); }
 
 // ---------- 错题本 ----------
 function addToWrongBook(q) {
@@ -1302,6 +1732,7 @@ function clearWrongBook() {
 // ---------- 结算 ----------
 function finish() {
   stopTimer();
+  cancelNext();
   document.getElementById('screen-quiz').style.display = 'none';
   document.getElementById('screen-result').style.display = '';
   document.getElementById('progress-bar').style.width = '100%';
@@ -1360,7 +1791,7 @@ function finish() {
   if (wrongThisRound.length) {
     box.style.display = '';
     document.getElementById('review-list').innerHTML = wrongThisRound.map(x =>
-      `<div class="review-item"><span>${escapeHtml(x.q.meaning)}（${escapeHtml(x.q.cat)}）</span><span class="ans">${escapeHtml(x.q.answers.join(' / '))}</span></div>`
+      `<div class="review-item"><span>${escapeHtml(x.q.meaning)}（${escapeHtml(x.q.cat)}）</span><span style="display:flex;align-items:center;gap:8px"><span class="ans">${escapeHtml(x.q.answers.join(' / '))}</span><button class="rm" style="color:#5cd6a8" onclick="speak(${jsStr(x.q.answers[0])},'en-US')">🔊</button></span></div>`
     ).join('');
   } else box.style.display = 'none';
 }
@@ -1385,7 +1816,7 @@ function shareResult() {
   const acc = Math.round(right / round.length * 100);
   const r = rankInfo(stats.score);
   const text =
-`🐧 Linux命令斩 v4 成绩单
+`🐧 Linux命令斩 v5 成绩单
 💎 得分：${score} 分
 ✅ 答对 ${right}/${round.length}（${acc}%）
 🔥 最高连对：${maxStreak}
@@ -1432,8 +1863,13 @@ function renderLearnList() {
       <div class="li-detail">
         📖 英文全称：${q.en ? escapeHtml(q.en) : '无'}<br>
         ${q.usage ? '💡 示例：<code style="color:#5cd6a8">' + escapeHtml(q.usage) + '</code><br>' : ''}
+        ${paramsHtml(q)}${paramsHtml(q) ? '<br>' : ''}
         🗂️ 分类：${escapeHtml(q.cat)}　·　📝 类型：${q.type === 'flag' ? '参数' : '命令'}<br>
-        📊 答对 ${stats.rights[k] || 0} 次　·　❌ 答错 ${stats.wrongs[k] || 0} 次
+        📊 答对 ${stats.rights[k] || 0} 次　·　❌ 答错 ${stats.wrongs[k] || 0} 次<br>
+        <span style="display:flex;gap:8px;margin-top:6px">
+          <button class="btn-sm" style="flex:none;padding:6px 12px" onclick="event.stopPropagation();speak(${jsStr(q.answers[0])},'en-US')">🔊 读命令</button>
+          <button class="btn-sm" style="flex:none;padding:6px 12px" onclick="event.stopPropagation();speak(${jsStr(q.meaning)},'zh-CN')">🔊 读意思</button>
+        </span>
       </div>
     </div>`;
   }).join('') || '<div class="empty-tip">没有找到相关命令</div>';
