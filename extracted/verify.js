@@ -35,10 +35,12 @@ scripts.forEach((s, i) => {
 });
 
 // 3. 新增元素检查
-['q-text', 'sound-toggle', 'goal-input', 'ov-goal', 'logo-wrap'].forEach(id => {
+['q-text', 'sound-toggle', 'goal-input', 'ov-goal'].forEach(id => {
   if (html.includes('id="' + id + '"')) pass('元素存在: #' + id);
   else fail('缺少元素: #' + id);
 });
+if (html.includes('class="logo-wrap"')) pass('元素存在: .logo-wrap');
+else fail('缺少元素: .logo-wrap');
 
 // 4. 旧问题检查：不应再使用 prompt/firstChild
 if (html.includes("prompt('每日目标")) fail('仍有 prompt 调用');
@@ -46,10 +48,11 @@ else pass('已移除 prompt 调用');
 if (html.includes('q-word\').firstChild')) fail('仍使用 firstChild hack');
 else pass('已移除 firstChild hack');
 
-// 5. answered 锁
-const answerLocks = (html.match(/if \(answered\) return; answered = true;/g) || []).length;
-if (answerLocks === 5) pass('答题锁已应用到 5 处');
-else fail('答题锁数量异常: ' + answerLocks);
+// 5. answered 锁（submit 空输入守卫 + 4 处完整锁）
+const locks = (html.match(/if \(answered\) return; answered = true;/g) || []).length;
+const submitGuard = html.includes('function submit() {\n  if (answered) return;\n  const input = document.getElementById(\'answer\');\n  const user = input.value;\n  if (!user.trim()) return;');
+if (locks === 4 && submitGuard) pass('答题锁已应用（submit 空输入守卫 + 4 处锁）');
+else fail('答题锁数量异常: ' + locks + ' submitGuard=' + submitGuard);
 
 console.log(ok ? '\n全部通过 ✔' : '\n存在问题 ✘');
 process.exit(ok ? 0 : 1);

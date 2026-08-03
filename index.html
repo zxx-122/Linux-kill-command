@@ -829,6 +829,7 @@ function closeOnboard() {
 const CONF_COLORS = ['#3fb88c', '#ffd166', '#ff8c42', '#ff6363', '#5cd6a8', '#6ca0ff'];
 function launchConfetti(n) {
   const el = document.getElementById('ov-celebrate');
+  el.querySelectorAll('.confetti').forEach(c => c.remove());
   for (let i = 0; i < (n || 40); i++) {
     const c = document.createElement('span');
     c.className = 'confetti';
@@ -936,6 +937,7 @@ function showTab(t) {
     document.getElementById('tab-' + x).classList.toggle('active', t === x));
   ['view-quiz', 'view-learn', 'view-wrong', 'view-stats'].forEach(x =>
     document.getElementById(x).style.display = t === x.replace('view-', '') ? '' : 'none');
+  if (t !== 'quiz') stopTimer();   // 离开练习页时停掉倒计时，避免后台误判超时
   if (t === 'learn') renderLearn();
   if (t === 'wrong') renderWrongBook();
   if (t === 'stats') renderStats();
@@ -987,7 +989,7 @@ function startQuiz() {
   }
   for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
   round = pool.slice(0, roundSize);
-  qIdx = 0; score = 0; streak = 0; maxStreak = 0; wrongThisRound = []; skipCount = 0;
+  qIdx = 0; score = 0; streak = 0; maxStreak = 0; wrongThisRound = []; skipCount = 0; wrongStreak = 0;
   document.getElementById('screen-start').style.display = 'none';
   document.getElementById('screen-result').style.display = 'none';
   document.getElementById('screen-quiz').style.display = '';
@@ -1047,8 +1049,11 @@ function renderQ() {
 function renderChoices(q) {
   const grid = document.getElementById('choice-grid');
   const opts = [q.answers[0]];
-  const sameCat = QUESTIONS.filter(x => x.cat === q.cat && x.answers[0] !== q.answers[0]);
-  const others = QUESTIONS.filter(x => x.cat !== q.cat && x.answers[0] !== q.answers[0]);
+  // 干扰项与题目保持同难度，避免基础题混入 kubectl、进阶题混入 ls
+  const isHard = isHardCat(q.cat);
+  const tier = isHard ? QUESTIONS.filter(x => isHardCat(x.cat)) : QUESTIONS.filter(x => !isHardCat(x.cat));
+  const sameCat = tier.filter(x => x.cat === q.cat && x.answers[0] !== q.answers[0]);
+  const others = tier.filter(x => x.cat !== q.cat && x.answers[0] !== q.answers[0]);
   const fill = (arr) => {
     for (const x of arr) {
       if (opts.length >= 4) break;
@@ -1401,12 +1406,7 @@ function shareResult() {
 
 // ---------- 学习页 ----------
 let learnCat = 'all', learnKeyword = '';
-function renderLearn() {
-  const search = document.getElementById('learn-search');
-  search.value = learnKeyword;
-  const chips = document.getElementById('learn-chips');
-  chips.innerHTML = ['all', ...cats].map(c =>
-    `<button class="chip${learnCat === c ? ' sel' : ''}" onclick="setLearnCat(${jsStr(c)})">${c === 'all' ? '全部' : escapeHtml(c)}</button>`).join('');
+function renderLearnList() {
   const kw = learnKeyword.trim().toLowerCase();
   let list = QUESTIONS.filter(q => {
     if (learnCat !== 'all' && q.cat !== learnCat) return false;
@@ -1438,6 +1438,14 @@ function renderLearn() {
     </div>`;
   }).join('') || '<div class="empty-tip">没有找到相关命令</div>';
 }
+function renderLearn() {
+  const search = document.getElementById('learn-search');
+  search.value = learnKeyword;
+  const chips = document.getElementById('learn-chips');
+  chips.innerHTML = ['all', ...cats].map(c =>
+    `<button class="chip${learnCat === c ? ' sel' : ''}" onclick="setLearnCat(${jsStr(c)})">${c === 'all' ? '全部' : escapeHtml(c)}</button>`).join('');
+  renderLearnList();
+}
 function setLearnCat(c) { learnCat = c; renderLearn(); }
 function toggleLearnItem(el) { el.classList.toggle('open'); }
 function toggleFav(k) {
@@ -1447,35 +1455,7 @@ function toggleFav(k) {
 }
 document.getElementById('learn-search').addEventListener('input', e => {
   learnKeyword = e.target.value;
-  const kw = learnKeyword.trim().toLowerCase();
-  let list = QUESTIONS.filter(q => {
-    if (learnCat !== 'all' && q.cat !== learnCat) return false;
-    if (!kw) return true;
-    return q.answers.some(a => a.toLowerCase().includes(kw)) ||
-      q.meaning.toLowerCase().includes(kw) ||
-      (q.en || '').toLowerCase().includes(kw);
-  });
-  document.getElementById('li-count').textContent = `共 ${list.length} 条`;
-  document.getElementById('learn-list').innerHTML = list.map(q => {
-    const k = q.answers[0];
-    const m = masteryOf(q);
-    const isFav = stats.favs.includes(k);
-    return `<div class="learn-item" onclick="toggleLearnItem(this)">
-      <div class="li-row1">
-        <span class="${q.type === 'flag' ? 'li-flag' : 'li-cmd'}">${escapeHtml(q.answers.join(' / '))}</span>
-        <span class="li-meaning">${escapeHtml(q.meaning)}</span>
-        <span class="mastery ${masteryClass(m)}">${masteryText(m)}</span>
-        <button class="li-btn" onclick="event.stopPropagation();toggleFav(${jsStr(k)})">${isFav ? '⭐' : '☆'}</button>
-        <button class="li-btn" onclick="event.stopPropagation();speak(${jsStr(q.answers[0])},'en-US')">🔊</button>
-      </div>
-      <div class="li-detail">
-        📖 英文全称：${q.en ? escapeHtml(q.en) : '无'}<br>
-        ${q.usage ? '💡 示例：<code style="color:#5cd6a8">' + escapeHtml(q.usage) + '</code><br>' : ''}
-        🗂️ 分类：${escapeHtml(q.cat)}　·　📝 类型：${q.type === 'flag' ? '参数' : '命令'}<br>
-        📊 答对 ${stats.rights[k] || 0} 次　·　❌ 答错 ${stats.wrongs[k] || 0} 次
-      </div>
-    </div>`;
-  }).join('') || '<div class="empty-tip">没有找到相关命令</div>';
+  renderLearnList();
 });
 
 // ---------- 错题页 ----------
@@ -1569,7 +1549,9 @@ document.getElementById('answer').addEventListener('keydown', e => {
 });
 
 // 恢复上次的设置
-selectCat = prefs.cat; roundSize = prefs.size; qtype = prefs.qtype; mode = prefs.mode; challenge = prefs.challenge; diff = prefs.diff || 'basic';
+selectCat = prefs.cat; roundSize = prefs.size; qtype = prefs.qtype; mode = prefs.mode;
+challenge = typeof prefs.challenge !== 'undefined' ? prefs.challenge : localStorage.getItem(CHALLENGE_KEY) === '1';
+diff = prefs.diff || 'basic';
 document.querySelectorAll('.round-opt button[data-n]').forEach(b => b.classList.toggle('sel', +b.dataset.n === roundSize));
 document.getElementById('challenge').checked = challenge;
 renderStart();
