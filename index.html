@@ -969,7 +969,9 @@ function renderShortcuts() {
     group: g.group,
     items: g.items.filter(it =>
       (scCat === 'all' || scCat === g.group) &&
-      (!kw || it.keys.toLowerCase().includes(kw) || it.desc.toLowerCase().includes(kw))
+      (!kw || g.group.toLowerCase().includes(kw) ||
+             it.keys.toLowerCase().includes(kw) ||
+             it.desc.toLowerCase().includes(kw))
     )
   })).filter(g => g.items.length);
   document.getElementById('sc-list').innerHTML = list.map(g =>
