@@ -315,8 +315,40 @@
   .hard-item .cmd { font-family: monospace; font-weight: 700; color: #5cd6a8; }
   .hard-item .n { color: #ff9c9c; font-size: 11.5px; }
 
+  .moverview { display: flex; gap: 8px; margin: 10px 0 12px; }
+  .moverview .mo {
+    flex: 1; text-align: center; padding: 10px 4px; border-radius: 12px;
+    background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+  }
+  .moverview .mo b { display: block; font-size: 18px; margin-bottom: 2px; }
+  .moverview .mo span { font-size: 11.5px; color: var(--ink-dim); }
+  .moverview .mo.mv-a b { color: #5cd6a8; }
+  .moverview .mo.mv-b b { color: #ffd166; }
+  .moverview .mo.mv-c b { color: #9fb6bf; }
+
+  .wb-group { margin-bottom: 12px; }
+  .wb-cat {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 7px 10px; margin-bottom: 6px; border-radius: 8px;
+    background: rgba(63,184,140,0.1); border: 1px solid rgba(63,184,140,0.16);
+    font-size: 13px; font-weight: 700; color: #8fe3c0;
+  }
+  .wb-cat small { font-weight: 400; color: var(--ink-dim); font-size: 11.5px; margin-left: 6px; }
+  .rm.good { color: #5cd6a8; font-size: 15px; }
+
   footer { margin-top: 22px; color: #6d8a94; font-size: 11.5px; text-align: center; line-height: 1.8; }
-  @media (max-width: 480px) { .q-word { font-size: 23px; min-height: 84px; } .flash-card .ans-big { font-size: 28px; } }
+  @media (max-width: 480px) {
+    .q-word { font-size: 23px; min-height: 84px; }
+    .flash-card .ans-big { font-size: 28px; }
+    /* 移动端触控目标达标：tab 与主要按钮不低于 44px */
+    .tab { min-height: 46px; padding: 12px 4px; }
+    .round-opt button, .actions button, .flash-btn-row button, .cat-opt,
+    .choice-btn, .btn-main, .goal-btn { min-height: 48px; }
+    .btn-sm { min-height: 48px; }
+    .goal-btn { padding: 8px 14px; font-size: 13px; }
+    .toggle-row { align-items: center; }
+    .toggle-row input { width: 22px; height: 22px; }
+  }
 
   /* 人性化动效 */
   @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -579,7 +611,7 @@
       <button class="btn-sm danger" onclick="clearWrongBook()" style="flex:none;padding:0 18px">清空</button>
     </div>
     <div id="wb-list"></div>
-    <div class="stat-note">答对的题会自动毕业移除 · 错得越多的越靠前</div>
+    <div class="stat-note">答对自动毕业移除 · 也可点「✓」手动标记已掌握 · 错得多的排前面</div>
   </div>
 
   <!-- 战绩区 -->
@@ -599,6 +631,13 @@
     <div class="stat-row"><span>当前称号</span><span class="val small" id="s-rank">-</span></div>
     <div class="stat-row"><span>连续打卡</span><span class="val" id="s-daystreak">0 天</span></div>
     <div class="stat-row"><span>今日进度</span><span class="val" id="s-today">0/20</span></div>
+    <h3 style="margin:14px 0 8px;font-size:15.5px;">🧭 掌握概览</h3>
+    <div class="moverview">
+      <div class="mo mv-a"><b id="s-mv-mastered">0</b><span>已掌握</span></div>
+      <div class="mo mv-b"><b id="s-mv-learning">0</b><span>学习中</span></div>
+      <div class="mo mv-c"><b id="s-mv-new">0</b><span>未学</span></div>
+    </div>
+    <button class="btn-main" style="padding:11px;letter-spacing:1px" onclick="startWeakRound()">🎯 练薄弱点（未掌握的命令）</button>
     <h3 style="margin:14px 0 10px;font-size:15.5px;">🔥 常错命令 Top5</h3>
     <div class="hard-list" id="s-hard-list"></div>
     <div class="stat-note">数据保存在手机本地，不会上传 · 打卡和称号靠坚持，别随便清零哦</div>
@@ -1346,6 +1385,18 @@ function renderStart() {
   document.getElementById('tip').textContent = TIPS[Math.floor(Math.random() * TIPS.length)];
 }
 
+function beginRound(pool, n) {
+  showTab('quiz');
+  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+  round = pool.slice(0, n);
+  qIdx = 0; score = 0; streak = 0; maxStreak = 0; wrongThisRound = []; skipCount = 0; wrongStreak = 0;
+  history = []; answeredCount = 0; cancelNext();
+  document.getElementById('screen-start').style.display = 'none';
+  document.getElementById('screen-result').style.display = 'none';
+  document.getElementById('screen-quiz').style.display = '';
+  renderQ();
+}
+
 function startQuiz() {
   let pool;
   if (mode === 'wrongbook') {
@@ -1360,14 +1411,17 @@ function startQuiz() {
     const rest = pool.filter(q => !stats.favs.includes(q.answers[0]));
     if (fav.length) pool = [...fav, ...rest];
   }
-  for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
-  round = pool.slice(0, roundSize);
-  qIdx = 0; score = 0; streak = 0; maxStreak = 0; wrongThisRound = []; skipCount = 0; wrongStreak = 0;
-  history = []; answeredCount = 0; cancelNext();
-  document.getElementById('screen-start').style.display = 'none';
-  document.getElementById('screen-result').style.display = 'none';
-  document.getElementById('screen-quiz').style.display = '';
-  renderQ();
+  beginRound(pool, roundSize);
+}
+
+function startWeakRound() {
+  const pool = QUESTIONS
+    .map(q => ({ q, m: masteryOf(q), w: stats.wrongs[q.answers[0]] || 0 }))
+    .filter(x => x.m < 2)
+    .sort((a, b) => (a.m - b.m) || (b.w - a.w))
+    .map(x => x.q);
+  if (!pool.length) { alert('所有命令都已掌握，太强了！去进阶模式或挑战自己吧～'); return; }
+  beginRound(pool, Math.min(roundSize, pool.length));
 }
 
 function renderQ() {
@@ -1898,13 +1952,27 @@ document.getElementById('learn-search').addEventListener('input', e => {
 function renderWrongBook() {
   const list = stats.wrongBook.slice().sort((a, b) => b.times - a.times);
   document.getElementById('wb-sub').textContent =
-    list.length ? `共 ${list.length} 道错题，错得多的排前面，答对即毕业` : '错题本还是空的？要么你天赋异禀，要么你还没开始练。';
-  document.getElementById('wb-list').innerHTML = list.map(w =>
-    `<div class="review-item">
-      <span>${escapeHtml(w.meaning)}<br><small style="color:#9fb6bf">${escapeHtml(w.cat)} · 错 ${+w.times || 0} 次${w.lastSeen ? ' · ' + escapeHtml(String(w.lastSeen).slice(5)) : ''}</small></span>
-      <span style="display:flex;align-items:center;gap:8px"><span class="ans">${escapeHtml(w.answers.join(' / '))}</span>
-      <button class="rm" onclick="removeWrongItem(${jsStr(w.a)})">✖</button></span>
+    list.length ? `共 ${list.length} 道错题 · 按分类分组，答对或点「✓」即毕业` : '错题本还是空的？要么你天赋异禀，要么你还没开始练。';
+  const groups = {};
+  list.forEach(w => { (groups[w.cat] = groups[w.cat] || []).push(w); });
+  document.getElementById('wb-list').innerHTML = Object.entries(groups).map(([cat, items]) =>
+    `<div class="wb-group">
+      <div class="wb-cat"><span>${escapeHtml(cat)}<small>${items.length} 道</small></span>
+        <button class="btn-sm good" style="padding:5px 12px;border:none" onclick="removeWrongCat(${jsStr(cat)})">✓ 全部已掌握</button></div>
+      ${items.map(w =>
+        `<div class="review-item">
+          <span>${escapeHtml(w.meaning)}<br><small style="color:#9fb6bf">错 ${+w.times || 0} 次${w.lastSeen ? ' · ' + escapeHtml(String(w.lastSeen).slice(5)) : ''}</small></span>
+          <span style="display:flex;align-items:center;gap:10px"><span class="ans">${escapeHtml(w.answers.join(' / '))}</span>
+          <button class="rm good" title="已掌握，毕业移除" onclick="removeWrongItem(${jsStr(w.a)})">✓</button>
+          <button class="rm" title="从错题本移除" onclick="removeWrongItem(${jsStr(w.a)})">✖</button></span>
+        </div>`).join('')}
     </div>`).join('') || '<div class="empty-tip">错题本清零！这次算你厉害，下次可别再来！</div>';
+}
+function removeWrongCat(cat) {
+  stats.wrongBook = stats.wrongBook.filter(w => w.cat !== cat);
+  saveStats();
+  renderWrongBook();
+  renderStart();
 }
 function removeWrongItem(a) {
   stats.wrongBook = stats.wrongBook.filter(w => w.a !== a);
@@ -1926,6 +1994,12 @@ function renderStats() {
   document.getElementById('s-rank').textContent = r.cur.emoji + ' ' + r.cur.name + (r.nxt ? `（还差 ${r.need} 分）` : '（满级）');
   document.getElementById('s-daystreak').textContent = stats.dayStreak + ' 天';
   document.getElementById('s-today').textContent = `${stats.dayCount}/${stats.goal}`;
+  // 掌握概览
+  const mv = { m: 0, l: 0, n: 0 };
+  QUESTIONS.forEach(q => { const m = masteryOf(q); mv[m === 2 ? 'm' : m === 1 ? 'l' : 'n']++; });
+  document.getElementById('s-mv-mastered').textContent = mv.m;
+  document.getElementById('s-mv-learning').textContent = mv.l;
+  document.getElementById('s-mv-new').textContent = mv.n;
   const hard = Object.entries(stats.wrongs).sort((a, b) => b[1] - a[1]).slice(0, 5);
   document.getElementById('s-hard-list').innerHTML = hard.length
     ? hard.map(([cmd, n]) =>
